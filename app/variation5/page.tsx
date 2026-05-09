@@ -146,7 +146,7 @@ const team = [
 ];
 
 export const metadata: Metadata = {
-  title: "Caliga — Primary research on frontier technology",
+  title: "Caliga — Research on frontier technology",
   description:
     "A two-person research collective covering crypto, fintech, deep tech, and frontier AI.",
   robots: { index: false, follow: true },
@@ -184,7 +184,7 @@ export default function Variation5Page() {
                           color: INK,
                         }}
                       >
-                        <Faded>Primary research on</Faded> frontier technology
+                        <Faded>Research on</Faded> frontier technology
                         <br />
                         <Faded>before the market</Faded>
                         <br />
@@ -199,8 +199,7 @@ export default function Variation5Page() {
                           style={{ color: "#4a4540" }}
                         >
                           Caliga is a research collective covering crypto,
-                          fintech, deep tech, and frontier AI. We publish before
-                          we pitch, and we pitch rarely.
+                          fintech, deep tech, and frontier AI.
                         </p>
                         <div className="flex flex-col justify-center gap-4">
                           <div className="flex flex-wrap gap-3">
@@ -618,7 +617,6 @@ export default function Variation5Page() {
                   >
                     Share the problem, what you have built, and what you want
                     reviewed. We respond when the research can add real value.
-                    Capital is a separate question.
                   </p>
                   <div className="mt-8 flex flex-wrap gap-3">
                     <a
@@ -664,8 +662,6 @@ export default function Variation5Page() {
                       style={{ color: "#8a8880" }}
                     >
                       Our output is research you can trace, not a presentation.
-                      When we allocate, we do so early, selectively, and always
-                      after the work is complete.
                     </p>
                   </div>
                 </div>

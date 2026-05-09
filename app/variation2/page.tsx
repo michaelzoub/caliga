@@ -25,7 +25,7 @@ const WARM_BORDER = "#ccc5bb";
 const researchPillars = [
   {
     n: "01",
-    label: "Primary research",
+    label: "Research",
     body: "Long-form memos, scenario tables, and reproducible dashboards. Sources cited, method open, steps traceable.",
   },
   {
