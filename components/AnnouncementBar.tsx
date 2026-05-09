@@ -32,7 +32,7 @@ export function AnnouncementBar() {
                     Research memo
                   </span>
                   <Link
-                    href="/#thesis"
+                    href="/writing"
                     className="shrink-0 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-white underline decoration-white/40 underline-offset-[3px] transition-colors hover:decoration-[var(--color-accent-cyan)] md:text-[11px] md:font-medium"
                   >
                     Read thesis →

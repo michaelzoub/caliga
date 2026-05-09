@@ -1,15 +1,13 @@
 import Link from "next/link";
 import { AnnouncementBar } from "@/components/AnnouncementBar";
 import { MobileNav } from "@/components/MobileNav";
-import { Button, Container } from "@/components/ui";
-import { SOCIAL_X_URL } from "@/lib/site";
+import { Container } from "@/components/ui";
 
 const nav = [
-  { label: "Thesis", href: "/#thesis" },
-  { label: "Approach", href: "/#work" },
+  { label: "Why we exist", href: "/#thesis" },
+  { label: "Approach", href: "/#method" },
   { label: "Team", href: "/#team" },
   { label: "Writing", href: "/writing" },
-  { label: "Company", href: "/#discover", hasCaret: true },
 ] as const;
 
 const mobileNavLinks = nav.map(({ label, href }) => ({ label, href }));
@@ -51,17 +49,6 @@ export function Header() {
               </Link>
             ))}
           </nav>
-          <div className="ml-auto hidden shrink-0 md:flex">
-            <Button
-              href={SOCIAL_X_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              variant="primary"
-              className="!px-4 !py-2.5 font-mono text-[10px] uppercase tracking-[0.14em]"
-            >
-              Research & updates
-            </Button>
-          </div>
           <MobileNav links={mobileNavLinks} />
         </Container>
       </header>

@@ -205,14 +205,14 @@ export default function Variation5Page() {
                         <div className="flex flex-col justify-center gap-4">
                           <div className="flex flex-wrap gap-3">
                             <a
-                              href="/variation5#contact"
+                              href="/#contact"
                               className="inline-flex items-center px-5 py-2.5 font-mono text-[11px] uppercase tracking-[0.18em] font-medium transition-opacity hover:opacity-80"
                               style={{ background: INK, color: WHITE }}
                             >
                               Collaborate
                             </a>
                             <a
-                              href="/variation5#research"
+                              href="/writing"
                               className="inline-flex items-center border px-5 py-2.5 font-mono text-[11px] uppercase tracking-[0.18em] font-medium transition-colors hover:border-[#111]"
                               style={{ borderColor: RULE, color: INK }}
                             >
@@ -232,7 +232,8 @@ export default function Variation5Page() {
         {/* THESIS */}
         <SectionReveal amount={0.06}>
           <section
-            className="relative overflow-hidden py-20 md:py-32"
+            id="thesis"
+            className="relative scroll-mt-24 overflow-hidden py-20 md:py-32"
             style={{ background: DARK_SECTION }}
           >
             <AuroraBackground
@@ -278,7 +279,7 @@ export default function Variation5Page() {
                 >
                   We work with founders who expect reviewers to read the
                   implementation, question the assumptions, and document the
-                  edge cases. Whether capital follows is a separate question.
+                  edge cases.
                 </p>
               </div>
             </Container>
@@ -372,7 +373,8 @@ export default function Variation5Page() {
         {/* THE METHOD */}
         <SectionReveal amount={0.06}>
           <section
-            className="relative overflow-hidden border-b py-16 md:py-24"
+            id="method"
+            className="relative scroll-mt-24 overflow-hidden border-b py-16 md:py-24"
             style={{ background: WHITE, borderColor: RULE }}
           >
             <div className="pointer-events-none absolute inset-0" aria-hidden>
@@ -396,11 +398,7 @@ export default function Variation5Page() {
                   className="font-sans font-semibold leading-tight tracking-tight text-3xl md:text-4xl text-center"
                   style={{ color: INK }}
                 >
-                  Research first.{" "}
-                  <span style={{ color: DIM }}>Capital follows</span>{" "}
-                  <span style={{ color: AMBER }}>
-                    when the work supports it.
-                  </span>
+                  Research first.
                 </h2>
                 <p
                   className="mx-auto mt-6 max-w-2xl font-serif-display text-base leading-relaxed text-center md:text-lg"
