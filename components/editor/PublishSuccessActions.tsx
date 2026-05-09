@@ -49,11 +49,17 @@ function CopyButton({
 export default function PublishSuccessActions({
   html,
   slug,
+  previewToken,
 }: {
   html: string;
   slug: string;
+  previewToken?: string;
 }) {
   const publicUrl = `${typeof window !== "undefined" ? window.location.origin : ""}/writing/${slug}`;
+  const previewUrl =
+    previewToken && typeof window !== "undefined"
+      ? `${window.location.origin}/writing/preview/${previewToken}`
+      : "";
 
   return (
     <div className="space-y-6">
@@ -96,6 +102,28 @@ export default function PublishSuccessActions({
           />
         </div>
       </div>
+
+      {previewToken ? (
+        <div className="border-t border-zinc-200 pt-6">
+          <p className="mb-2 font-mono text-[10px] uppercase tracking-[0.15em] text-zinc-400">
+            Unlisted preview URL
+          </p>
+          <div className="flex items-center gap-3">
+            <a
+              href={`/writing/preview/${previewToken}`}
+              className="font-mono text-sm text-cyan-700 underline underline-offset-4 hover:text-cyan-900"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              /writing/preview/{previewToken.slice(0, 8)}…
+            </a>
+            <CopyButton
+              label="Copy preview"
+              onCopy={() => navigator.clipboard.writeText(previewUrl)}
+            />
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

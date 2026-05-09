@@ -32,6 +32,10 @@ export default async function EditArticlePage({ params }: Props) {
       initialCoverImageUrl={
         typeof article.cover_image_url === "string" ? article.cover_image_url : ""
       }
+      initialPreviewToken={
+        typeof article.preview_token === "string" ? article.preview_token : ""
+      }
+      initialHasPassword={typeof article.password_hash === "string" && article.password_hash.length > 0}
     />
   );
 }

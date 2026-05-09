@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createServiceClient } from "@/lib/supabase";
+import { createPreviewToken, hashArticlePassword } from "@/lib/article-access";
 
 async function requireAuth() {
   const cookieStore = await cookies();
@@ -13,10 +14,16 @@ async function requireAuth() {
   }
 }
 
-/** Before migration, PostgREST rejects unknown columns — retry without them. */
-function isMissingBylineOrCoverColumnError(err: { message?: string } | null): boolean {
+/** Before migrations, PostgREST rejects unknown columns — retry without them. */
+function isMissingOptionalArticleColumnError(err: { message?: string } | null): boolean {
   const m = (err?.message ?? "").toLowerCase();
-  if (!m.includes("written_by") && !m.includes("cover_image_url")) return false;
+  const optionalColumns = [
+    "written_by",
+    "cover_image_url",
+    "preview_token",
+    "password_hash",
+  ];
+  if (!optionalColumns.some((col) => m.includes(col))) return false;
   return (
     m.includes("schema cache") ||
     m.includes("does not exist") ||
@@ -33,7 +40,9 @@ export async function saveDraft(data: {
   slug: string;
   writtenBy: string;
   coverImageUrl: string;
-}): Promise<string | null> {
+  articlePassword?: string;
+  clearArticlePassword?: boolean;
+}): Promise<{ id: string; previewToken?: string } | null> {
   await requireAuth();
   const supabase = createServiceClient();
   const now = new Date().toISOString();
@@ -41,6 +50,12 @@ export async function saveDraft(data: {
   const byline = {
     written_by: data.writtenBy.trim() || null,
     cover_image_url: data.coverImageUrl.trim() || null,
+  };
+  const access = {
+    ...(data.articlePassword?.trim()
+      ? { password_hash: hashArticlePassword(data.articlePassword.trim()) }
+      : {}),
+    ...(data.clearArticlePassword ? { password_hash: null } : {}),
   };
 
   if (data.id) {
@@ -52,13 +67,13 @@ export async function saveDraft(data: {
       published_at: null,
       updated_at: now,
     };
-    let { error } = await supabase.from("articles").update({ ...core, ...byline }).eq("id", data.id);
-    if (error && isMissingBylineOrCoverColumnError(error)) {
+    let { error } = await supabase.from("articles").update({ ...core, ...byline, ...access }).eq("id", data.id);
+    if (error && isMissingOptionalArticleColumnError(error)) {
       ({ error } = await supabase.from("articles").update(core).eq("id", data.id));
     }
     if (error) throw new Error(error.message);
     revalidatePath("/dashboard/writing");
-    return data.id;
+    return { id: data.id };
   }
 
   const coreInsert = {
@@ -70,10 +85,10 @@ export async function saveDraft(data: {
   };
   let { data: inserted, error } = await supabase
     .from("articles")
-    .insert({ ...coreInsert, ...byline })
-    .select("id")
+    .insert({ ...coreInsert, ...byline, ...access, preview_token: createPreviewToken() })
+    .select("id, preview_token")
     .single();
-  if (error && isMissingBylineOrCoverColumnError(error)) {
+  if (error && isMissingOptionalArticleColumnError(error)) {
     ({ data: inserted, error } = await supabase
       .from("articles")
       .insert(coreInsert)
@@ -83,7 +98,8 @@ export async function saveDraft(data: {
   if (error) throw new Error(error.message);
 
   revalidatePath("/dashboard/writing");
-  return (inserted as { id: string } | null)?.id ?? null;
+  const row = inserted as { id: string; preview_token?: string | null } | null;
+  return row ? { id: row.id, previewToken: row.preview_token ?? undefined } : null;
 }
 
 export async function publishArticle(data: {
@@ -94,6 +110,8 @@ export async function publishArticle(data: {
   slug: string;
   writtenBy: string;
   coverImageUrl: string;
+  articlePassword?: string;
+  clearArticlePassword?: boolean;
 }): Promise<{ redirectTo: string }> {
   await requireAuth();
   const supabase = createServiceClient();
@@ -102,6 +120,12 @@ export async function publishArticle(data: {
   const byline = {
     written_by: data.writtenBy.trim() || null,
     cover_image_url: data.coverImageUrl.trim() || null,
+  };
+  const access = {
+    ...(data.articlePassword?.trim()
+      ? { password_hash: hashArticlePassword(data.articlePassword.trim()) }
+      : {}),
+    ...(data.clearArticlePassword ? { password_hash: null } : {}),
   };
 
   let id = data.id;
@@ -115,8 +139,8 @@ export async function publishArticle(data: {
       published_at: now,
       updated_at: now,
     };
-    let { error } = await supabase.from("articles").update({ ...core, ...byline }).eq("id", id);
-    if (error && isMissingBylineOrCoverColumnError(error)) {
+    let { error } = await supabase.from("articles").update({ ...core, ...byline, ...access }).eq("id", id);
+    if (error && isMissingOptionalArticleColumnError(error)) {
       ({ error } = await supabase.from("articles").update(core).eq("id", id));
     }
     if (error) throw new Error(error.message);
@@ -130,10 +154,10 @@ export async function publishArticle(data: {
     };
     let { data: inserted, error } = await supabase
       .from("articles")
-      .insert({ ...coreInsert, ...byline })
+      .insert({ ...coreInsert, ...byline, ...access, preview_token: createPreviewToken() })
       .select("id")
       .single();
-    if (error && isMissingBylineOrCoverColumnError(error)) {
+    if (error && isMissingOptionalArticleColumnError(error)) {
       ({ data: inserted, error } = await supabase
         .from("articles")
         .insert(coreInsert)

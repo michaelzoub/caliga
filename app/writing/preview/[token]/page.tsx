@@ -1,51 +1,39 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
 import { cookies } from "next/headers";
+import { notFound } from "next/navigation";
 import { ArticlePage } from "@/components/writing/ArticlePage";
 import { ArticlePasswordGate } from "@/components/writing/ArticlePasswordGate";
 import {
   articleAccessCookieName,
   isValidArticleAccessCookie,
 } from "@/lib/article-access";
-import { getWritingPostBySlug } from "@/lib/writing/queries";
+import { getWritingPostByPreviewToken } from "@/lib/writing/queries";
 
 export const dynamic = "force-dynamic";
 
 type Props = {
-  params: Promise<{ slug: string }>;
+  params: Promise<{ token: string }>;
   searchParams?: Promise<{ access?: string }>;
 };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const { slug } = await params;
-  const post = await getWritingPostBySlug(slug);
-  if (!post) {
-    return { title: "Not found | Caliga" };
-  }
+  const { token } = await params;
+  const post = await getWritingPostByPreviewToken(token);
+  if (!post) return { title: "Not found | Caliga" };
   return {
-    title: `${post.title} | Caliga`,
+    title: `Preview: ${post.title} | Caliga`,
     description: post.excerpt,
-    ...(post.passwordHash && {
-      robots: { index: false, follow: false },
-    }),
-    ...(post.coverImageUrl && {
-      openGraph: {
-        images: [{ url: post.coverImageUrl, alt: post.title }],
-      },
-      twitter: {
-        card: "summary_large_image",
-        images: [post.coverImageUrl],
-      },
-    }),
+    robots: { index: false, follow: false },
   };
 }
 
-export default async function WritingPostPage({ params, searchParams }: Props) {
-  const { slug } = await params;
-  const post = await getWritingPostBySlug(slug);
-  if (!post) {
-    notFound();
-  }
+export default async function WritingPreviewPage({
+  params,
+  searchParams,
+}: Props) {
+  const { token } = await params;
+  const post = await getWritingPostByPreviewToken(token);
+  if (!post) notFound();
 
   const cookieStore = await cookies();
   const unlocked = isValidArticleAccessCookie(
@@ -53,6 +41,7 @@ export default async function WritingPostPage({ params, searchParams }: Props) {
     post.passwordHash,
     cookieStore.get(articleAccessCookieName(post.id))?.value
   );
+
   if (!unlocked) {
     const sp = (await searchParams) ?? {};
     return (
@@ -60,12 +49,12 @@ export default async function WritingPostPage({ params, searchParams }: Props) {
         <ArticlePasswordGate
           articleId={post.id}
           title={post.title}
-          returnTo={`/writing/${slug}`}
+          returnTo={`/writing/preview/${token}`}
           denied={sp.access === "denied"}
         />
       </main>
     );
   }
 
-  return <ArticlePage post={post} />;
+  return <ArticlePage post={post} eyebrow="Unlisted preview" />;
 }

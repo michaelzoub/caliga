@@ -12,11 +12,20 @@ export default async function PublishSuccessPage({ params }: Props) {
   const { id } = await params;
   const supabase = createServiceClient();
 
-  const { data: article } = await supabase
+  const primary = await supabase
     .from("articles")
-    .select("id, title, subtitle, content, slug, published_at")
+    .select("id, title, subtitle, content, slug, published_at, preview_token")
     .eq("id", id)
     .maybeSingle();
+  let article = primary.data as Record<string, unknown> | null;
+  if (primary.error) {
+    const fallback = await supabase
+      .from("articles")
+      .select("id, title, subtitle, content, slug, published_at")
+      .eq("id", id)
+      .maybeSingle();
+    article = fallback.data as Record<string, unknown> | null;
+  }
 
   if (!article || !article.published_at) notFound();
 
@@ -38,9 +47,9 @@ export default async function PublishSuccessPage({ params }: Props) {
         <h1 className="mb-2 font-sans text-2xl font-semibold text-zinc-900">
           {article.title as string}
         </h1>
-        {article.subtitle && (
+        {typeof article.subtitle === "string" && article.subtitle && (
           <p className="mb-10 font-sans text-base text-zinc-600">
-            {article.subtitle as string}
+            {article.subtitle}
           </p>
         )}
 
@@ -49,6 +58,9 @@ export default async function PublishSuccessPage({ params }: Props) {
         <PublishSuccessActions
           html={article.content as string}
           slug={article.slug as string}
+          previewToken={
+            typeof article.preview_token === "string" ? article.preview_token : ""
+          }
         />
 
         <div className="mt-10 border-t border-zinc-200 pt-8">

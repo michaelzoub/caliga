@@ -65,6 +65,8 @@ interface ArticleEditorProps {
   initialSlug?: string;
   initialWrittenBy?: string;
   initialCoverImageUrl?: string;
+  initialPreviewToken?: string;
+  initialHasPassword?: boolean;
 }
 
 function slugify(text: string): string {
@@ -85,6 +87,8 @@ export default function ArticleEditor({
   initialSlug = "",
   initialWrittenBy = "",
   initialCoverImageUrl = "",
+  initialPreviewToken = "",
+  initialHasPassword = false,
 }: ArticleEditorProps) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -95,6 +99,10 @@ export default function ArticleEditor({
   const [subtitle, setSubtitle] = useState(initialSubtitle);
   const [writtenBy, setWrittenBy] = useState(initialWrittenBy);
   const [coverImageUrl, setCoverImageUrl] = useState(initialCoverImageUrl);
+  const [previewToken, setPreviewToken] = useState(initialPreviewToken);
+  const [articlePassword, setArticlePassword] = useState("");
+  const [hasPassword, setHasPassword] = useState(initialHasPassword);
+  const [clearArticlePassword, setClearArticlePassword] = useState(false);
   const [slug, setSlug] = useState(initialSlug);
   const [slugManuallyEdited, setSlugManuallyEdited] = useState(!!initialSlug);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
@@ -253,13 +261,15 @@ export default function ArticleEditor({
             slug,
             writtenBy,
             coverImageUrl,
+            articlePassword,
+            clearArticlePassword,
           });
           if (result.redirectTo) {
             router.push(result.redirectTo);
             return;
           }
         } else {
-          const id = await saveDraft({
+          const saved = await saveDraft({
             id: articleId,
             title,
             subtitle,
@@ -267,10 +277,23 @@ export default function ArticleEditor({
             slug,
             writtenBy,
             coverImageUrl,
+            articlePassword,
+            clearArticlePassword,
           });
-          if (id && !articleId) {
-            setArticleId(id);
-            window.history.replaceState({}, "", `/dashboard/writing/${id}`);
+          if (saved?.id && !articleId) {
+            setArticleId(saved.id);
+            window.history.replaceState({}, "", `/dashboard/writing/${saved.id}`);
+          }
+          if (saved?.previewToken) {
+            setPreviewToken(saved.previewToken);
+          }
+          if (articlePassword.trim()) {
+            setHasPassword(true);
+            setArticlePassword("");
+          }
+          if (clearArticlePassword) {
+            setHasPassword(false);
+            setClearArticlePassword(false);
           }
           isDirty.current = false;
           setSaveStatus("saved");
@@ -282,7 +305,17 @@ export default function ArticleEditor({
         setIsPublishing(false);
       }
     },
-    [articleId, title, subtitle, slug, writtenBy, coverImageUrl, router]
+    [
+      articleId,
+      title,
+      subtitle,
+      slug,
+      writtenBy,
+      coverImageUrl,
+      articlePassword,
+      clearArticlePassword,
+      router,
+    ]
   );
 
   // Auto-save every 30s if dirty
@@ -627,6 +660,76 @@ export default function ArticleEditor({
                     className="w-fit font-mono text-[10px] uppercase tracking-[0.12em] text-zinc-500 underline-offset-4 hover:text-zinc-900"
                   >
                     Remove cover
+                  </button>
+                ) : null}
+              </div>
+            </div>
+          </div>
+          <div className="grid gap-4 border-t border-zinc-100 pt-6 md:grid-cols-2">
+            <div>
+              <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-zinc-400">
+                Private preview
+              </p>
+              {previewToken ? (
+                <div className="mt-2 flex flex-wrap items-center gap-3">
+                  <a
+                    href={`/writing/preview/${previewToken}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-mono text-xs text-cyan-700 underline underline-offset-4 hover:text-cyan-900"
+                  >
+                    Open unlisted preview
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      navigator.clipboard.writeText(
+                        `${window.location.origin}/writing/preview/${previewToken}`
+                      )
+                    }
+                    className="font-mono text-[10px] uppercase tracking-[0.12em] text-zinc-500 underline-offset-4 hover:text-zinc-900"
+                  >
+                    Copy URL
+                  </button>
+                </div>
+              ) : (
+                <p className="mt-2 font-sans text-sm text-zinc-500">
+                  Save once to generate an unlisted preview URL.
+                </p>
+              )}
+            </div>
+            <div>
+              <label className="block font-mono text-[10px] uppercase tracking-[0.15em] text-zinc-400">
+                Article password
+              </label>
+              <input
+                type="password"
+                value={articlePassword}
+                onChange={(e) => {
+                  setArticlePassword(e.target.value);
+                  setClearArticlePassword(false);
+                  isDirty.current = true;
+                }}
+                placeholder={hasPassword ? "Set a new password" : "Optional password"}
+                className="mt-2 w-full border border-zinc-200 bg-white px-3 py-2 font-sans text-sm text-zinc-800 outline-none placeholder:text-zinc-400 focus:border-zinc-400"
+              />
+              <div className="mt-2 flex flex-wrap items-center gap-3">
+                <span className="font-sans text-xs text-zinc-500">
+                  {hasPassword && !clearArticlePassword
+                    ? "Password access is enabled."
+                    : "No article password enabled."}
+                </span>
+                {hasPassword ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setArticlePassword("");
+                      setClearArticlePassword(true);
+                      isDirty.current = true;
+                    }}
+                    className="font-mono text-[10px] uppercase tracking-[0.12em] text-red-600 underline-offset-4 hover:text-red-800"
+                  >
+                    Remove password
                   </button>
                 ) : null}
               </div>

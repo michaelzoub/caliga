@@ -429,11 +429,47 @@ N\tn1\tStart\tround
 N\tn2\tWork\trect
 E\tn1\tn2`;
 
-function mqLabel(raw: string) {
-  const t = raw.trim().replace(/"/g, '\\"').replace(/\n/g, " ");
-  if (!t.length) return '""';
-  if (/^[A-Za-z0-9]+$/.test(t)) return t;
-  return `"${t}"`;
+function htmlEscapeMermaidLabel(raw: string) {
+  return raw
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/\|/g, " ");
+}
+
+function wrapMermaidWords(raw: string, maxChars: number) {
+  const words = raw.trim().replace(/\s+/g, " ").split(" ").filter(Boolean);
+  const lines: string[] = [];
+  let current = "";
+
+  for (const word of words) {
+    if (word.length > maxChars) {
+      if (current) {
+        lines.push(current);
+        current = "";
+      }
+      for (let i = 0; i < word.length; i += maxChars) {
+        lines.push(word.slice(i, i + maxChars));
+      }
+      continue;
+    }
+
+    const next = current ? `${current} ${word}` : word;
+    if (next.length <= maxChars) current = next;
+    else {
+      if (current) lines.push(current);
+      current = word;
+    }
+  }
+
+  if (current) lines.push(current);
+  return lines.length ? lines : [""];
+}
+
+function mqLabel(raw: string, maxChars = 24) {
+  const lines = wrapMermaidWords(raw, maxChars).map(htmlEscapeMermaidLabel);
+  return `"${lines.join("<br/>")}"`;
 }
 
 function flowDiagramToText(
@@ -447,7 +483,7 @@ function flowDiagramToText(
   const lines: string[] = [`flowchart ${direction}`];
 
   for (const n of nodes) {
-    const lab = mqLabel(n.label);
+    const lab = mqLabel(n.label, n.shape === "diamond" ? 22 : 28);
     switch (n.shape) {
       case "round":
         lines.push(`  ${n.id}([${lab}])`);
@@ -462,9 +498,8 @@ function flowDiagramToText(
   }
 
   for (const e of edges) {
-    const raw = e.label.trim().replace(/"/g, "'").replace(/\|/g, " ");
-    if (!raw.length) lines.push(`  ${e.fromId} --> ${e.toId}`);
-    else lines.push(`  ${e.fromId} -->|"${raw}"| ${e.toId}`);
+    if (!e.label.trim()) lines.push(`  ${e.fromId} --> ${e.toId}`);
+    else lines.push(`  ${e.fromId} -->|${mqLabel(e.label, 24)}| ${e.toId}`);
   }
 
   return lines.join("\n");
@@ -1400,9 +1435,8 @@ export function GraphicsStudio() {
     }).filter((p) => Number.isFinite(p.y));
 
     const allY = [...observed, ...forecast].map((p) => p.y).filter(Number.isFinite);
-    const minY = allY.length ? Math.min(...allY) : 0;
     const maxY = allY.length ? Math.max(...allY) : 1;
-    const yPad = Math.max(1, (maxY - minY || 1) * 0.12);
+    const yPad = Math.max(1, (maxY || 1) * 0.12);
 
     return {
       observed,
@@ -1410,7 +1444,7 @@ export function GraphicsStudio() {
       boundary: { x: x0, y: y0 },
       xMin: minX,
       xMax: endX,
-      yMin: minY - yPad,
+      yMin: 0,
       yMax: maxY + yPad,
     };
   }, [
@@ -1614,7 +1648,7 @@ export function GraphicsStudio() {
           },
           flowchart: {
             curve: "linear",
-            htmlLabels: false,
+            htmlLabels: true,
             padding: 20,
             useMaxWidth: true,
             nodeSpacing: 64,

@@ -16,10 +16,19 @@ function formatDate(iso: string) {
 
 export default async function DashboardWritingPage() {
   const supabase = createServiceClient();
-  const { data: articles } = await supabase
+  const primary = await supabase
     .from("articles")
-    .select("id, title, subtitle, slug, published_at, created_at")
+    .select("id, title, subtitle, slug, published_at, created_at, preview_token, password_hash")
     .order("created_at", { ascending: false });
+  let articles: Record<string, unknown>[] | null =
+    (primary.data as Record<string, unknown>[] | null) ?? null;
+  if (primary.error) {
+    const fallback = await supabase
+      .from("articles")
+      .select("id, title, subtitle, slug, published_at, created_at")
+      .order("created_at", { ascending: false });
+    articles = (fallback.data as Record<string, unknown>[] | null) ?? null;
+  }
 
   return (
     <main className="min-h-screen bg-white">
@@ -73,9 +82,9 @@ export default async function DashboardWritingPage() {
                         <span className="italic text-zinc-400">Untitled</span>
                       )}
                     </span>
-                    {article.subtitle && (
+                    {typeof article.subtitle === "string" && article.subtitle && (
                       <p className="mt-0.5 font-sans text-xs text-zinc-500 line-clamp-1">
-                        {article.subtitle as string}
+                        {article.subtitle}
                       </p>
                     )}
                   </td>
@@ -93,6 +102,21 @@ export default async function DashboardWritingPage() {
                   </td>
                   <td className="py-3 text-right">
                     <div className="flex items-center justify-end gap-3">
+                      {typeof article.preview_token === "string" ? (
+                        <Link
+                          href={`/writing/preview/${article.preview_token}`}
+                          target="_blank"
+                          className="font-mono text-[10px] uppercase tracking-[0.12em] text-cyan-700 transition-colors hover:text-cyan-900"
+                        >
+                          Preview
+                        </Link>
+                      ) : null}
+                      {typeof article.password_hash === "string" &&
+                      article.password_hash.length > 0 ? (
+                        <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-zinc-400">
+                          Locked
+                        </span>
+                      ) : null}
                       <Link
                         href={`/dashboard/writing/${article.id}`}
                         className="font-mono text-[10px] uppercase tracking-[0.12em] text-zinc-600 transition-colors hover:text-zinc-900"
