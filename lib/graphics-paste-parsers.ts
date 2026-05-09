@@ -14,6 +14,7 @@ export type DotRow = {
   dPrime: number;
   cPrime: number;
 };
+export type CurveRow = { id: string; x: number; y: number };
 
 export type FlowShape = "round" | "rect" | "diamond";
 export type FlowNode = {
@@ -23,7 +24,7 @@ export type FlowNode = {
 };
 export type FlowEdge = { id: string; fromId: string; toId: string; label: string };
 
-export type ChartPasteKind = "bar" | "dot" | "matrix" | "flow";
+export type ChartPasteKind = "bar" | "dot" | "matrix" | "flow" | "curve";
 
 let idSeq = 0;
 /** Row/node ids for studio tables and paste rows (client + server parsers). */
@@ -165,6 +166,45 @@ export function parseDotPaste(text: string): DotPasteResult {
     });
   }
   if (!rows.length) return { ok: false, error: "No data rows found." };
+  return { ok: true, rows };
+}
+
+export type CurvePasteResult =
+  | { ok: true; rows: CurveRow[] }
+  | { ok: false; error: string };
+
+export function parseCurvePaste(text: string): CurvePasteResult {
+  const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  if (!lines.length) return { ok: false, error: "Paste at least one x/y row." };
+
+  let start = 0;
+  const head = splitDataLine(lines[0]);
+  if (head.length >= 2) {
+    const x0 = parseNumberLoose(head[0]);
+    const y0 = parseNumberLoose(head[1]);
+    if (x0 === null || y0 === null) start = 1;
+  }
+
+  const rows: CurveRow[] = [];
+  for (let i = start; i < lines.length; i++) {
+    const p = splitDataLine(lines[i]);
+    if (p.length < 2) {
+      return {
+        ok: false,
+        error: `Line ${i + 1}: need 2 columns — x and y (tab or comma).`,
+      };
+    }
+    const x = parseNumberLoose(p[0]);
+    const y = parseNumberLoose(p[1]);
+    if (x === null || y === null) {
+      return {
+        ok: false,
+        error: `Line ${i + 1}: x and y must be numbers (got "${p[0]}", "${p[1]}").`,
+      };
+    }
+    rows.push({ id: nid("cr"), x, y });
+  }
+  if (!rows.length) return { ok: false, error: "No numeric x/y rows found." };
   return { ok: true, rows };
 }
 
@@ -491,6 +531,10 @@ export function validatePasteForChart(
     }
     case "flow": {
       const r = parseFlowPaste(t);
+      return r.ok ? { ok: true } : r;
+    }
+    case "curve": {
+      const r = parseCurvePaste(t);
       return r.ok ? { ok: true } : r;
     }
     default: {

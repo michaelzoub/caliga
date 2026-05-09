@@ -6,6 +6,8 @@ import {
   CategoryScale,
   Chart as ChartJS,
   LinearScale,
+  LineElement,
+  PointElement,
   Title,
   Tooltip,
   type TooltipItem,
@@ -27,6 +29,7 @@ import {
   PlusCircle,
   Shapes,
   Trash2,
+  TrendingUp,
   XCircle,
 } from "lucide-react";
 import {
@@ -40,7 +43,7 @@ import {
   type DragEvent,
   type ReactNode,
 } from "react";
-import { Bar } from "react-chartjs-2";
+import { Bar, Line } from "react-chartjs-2";
 import { GraphicsAssistPanel } from "@/components/dashboard/GraphicsAssistPanel";
 import {
   nid,
@@ -48,8 +51,10 @@ import {
   parseDotPaste,
   parseMatrixPaste,
   parseFlowPaste,
+  parseCurvePaste,
   type BarRow,
   type ChartPasteKind,
+  type CurveRow,
   type DotRow,
   type FlowEdge,
   type FlowNode,
@@ -85,7 +90,7 @@ const FONT_SANS =
 const EXPORT_BG = TOK.plotBg;
 
 /** Solid white canvas behind bars so PNG / clipboard export is never transparent. */
-const barWhiteBgPlugin: Plugin<"bar"> = {
+const chartWhiteBgPlugin: Plugin<"bar" | "line"> = {
   id: "studioBarWhiteBg",
   beforeDraw(chart) {
     const { ctx } = chart;
@@ -101,9 +106,11 @@ ChartJS.register(
   CategoryScale,
   LinearScale,
   BarElement,
+  LineElement,
+  PointElement,
   Tooltip,
   Title,
-  barWhiteBgPlugin
+  chartWhiteBgPlugin
 );
 
 function ensureSvgOpaqueWhiteRoot(svg: SVGSVGElement) {
@@ -394,7 +401,7 @@ async function flowCompositeToPngBlob(
   });
 }
 
-type TabId = "bar" | "dot" | "flow" | "matrix";
+type TabId = "bar" | "dot" | "flow" | "matrix" | "curve";
 
 /** Top-level studio area: chart editors vs LLM assist. */
 type StudioSectionTab = "graphics" | "assist";
@@ -407,6 +414,11 @@ Q2\t52\t46`;
 
 const PASTE_PLACEHOLDER_DOT = `Label\tBaseline\tD'\tC'
 Player A\t22\t45\t72`;
+
+const PASTE_PLACEHOLDER_CURVE = `x\ty
+0\t42
+1\t47
+2\t53`;
 
 const PASTE_PLACEHOLDER_MATRIX = `\tDiscover\tDesign\tBuild
 Row A\t0\t1\t2
@@ -923,9 +935,54 @@ function StepControl({
   );
 }
 
+type CurveModel = "linear" | "exponential" | "logarithmic" | "quadratic";
+
+function finiteNumber(n: number, fallback: number) {
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function sortedCurveRows(rows: CurveRow[]) {
+  return [...rows].sort((a, b) => a.x - b.x);
+}
+
+function interpolateYAt(rows: CurveRow[], x0: number): number {
+  const ordered = sortedCurveRows(rows);
+  if (!ordered.length) return 0;
+  const exact = ordered.find((r) => r.x === x0);
+  if (exact) return exact.y;
+  const before = [...ordered].reverse().find((r) => r.x < x0);
+  const after = ordered.find((r) => r.x > x0);
+  if (before && after && after.x !== before.x) {
+    const t = (x0 - before.x) / (after.x - before.x);
+    return before.y + (after.y - before.y) * t;
+  }
+  return before?.y ?? after?.y ?? ordered[0].y;
+}
+
+function forecastY(
+  model: CurveModel,
+  y0: number,
+  slope: number,
+  dx: number,
+  curvature: number
+) {
+  if (model === "exponential" && Math.abs(y0) > 0.000001) {
+    return y0 * Math.exp((slope / y0) * dx);
+  }
+  if (model === "logarithmic") {
+    const scale = Math.max(0.25, Math.abs(curvature));
+    return y0 + slope * scale * Math.log1p(Math.max(0, dx) / scale);
+  }
+  if (model === "quadratic") {
+    return y0 + slope * dx + curvature * dx * dx;
+  }
+  return y0 + slope * dx;
+}
+
 export function GraphicsStudio() {
   const tabs = [
     { id: "bar" as const, label: "Bar chart", icon: BarChart3 },
+    { id: "curve" as const, label: "Forecast curve", icon: TrendingUp },
     { id: "dot" as const, label: "Dot plot", icon: CircleDot },
     { id: "matrix" as const, label: "Lifecycle matrix", icon: Grid3x3 },
     { id: "flow" as const, label: "Flow chart", icon: GitBranch },
@@ -933,11 +990,11 @@ export function GraphicsStudio() {
 
   const [tab, setTab] = useState<TabId>("bar");
   const [studioSection, setStudioSection] = useState<StudioSectionTab>("graphics");
-  const [copied, setCopied] = useState<null | "bar" | "dot" | "flow" | "matrix">(
+  const [copied, setCopied] = useState<null | "bar" | "dot" | "flow" | "matrix" | "curve">(
     null
   );
 
-  const flashCopied = useCallback((key: "bar" | "dot" | "flow" | "matrix") => {
+  const flashCopied = useCallback((key: "bar" | "dot" | "flow" | "matrix" | "curve") => {
     setCopied(key);
     window.setTimeout(() => setCopied(null), 2200);
   }, []);
@@ -959,6 +1016,25 @@ export function GraphicsStudio() {
   );
 
   const barChartRef = useRef<Chart<"bar"> | null>(null);
+
+  const [curveRows, setCurveRows] = useState<CurveRow[]>([
+    { id: nid("cr"), x: 0, y: 42 },
+    { id: nid("cr"), x: 1, y: 47 },
+    { id: nid("cr"), x: 2, y: 53 },
+    { id: nid("cr"), x: 3, y: 61 },
+  ]);
+  const [curveModel, setCurveModel] = useState<CurveModel>("linear");
+  const [curveForecastStart, setCurveForecastStart] = useState(3);
+  const [curveForecastEnd, setCurveForecastEnd] = useState(8);
+  const [curveDerivative, setCurveDerivative] = useState(7);
+  const [curveCurvature, setCurveCurvature] = useState(0.35);
+  const [curveTitle, setCurveTitle] = useState("Observed data with forecast");
+  const [curveXL, setCurveXL] = useState("Period");
+  const [curveYL, setCurveYL] = useState("Value");
+  const [curveFoot, setCurveFoot] = useState(
+    "Vertical rule marks where observed data ends and the derivative-constrained forecast begins."
+  );
+  const curveChartRef = useRef<Chart<"line"> | null>(null);
 
   const [dotRows, setDotRows] = useState<DotRow[]>([
     { id: nid("dr"), label: "Player A", baseline: 22, dPrime: 45, cPrime: 72 },
@@ -1030,6 +1106,8 @@ export function GraphicsStudio() {
   const [pasteBarErr, setPasteBarErr] = useState<string | null>(null);
   const [pasteDot, setPasteDot] = useState("");
   const [pasteDotErr, setPasteDotErr] = useState<string | null>(null);
+  const [pasteCurve, setPasteCurve] = useState("");
+  const [pasteCurveErr, setPasteCurveErr] = useState<string | null>(null);
   const [pasteMatrix, setPasteMatrix] = useState("");
   const [pasteMatrixErr, setPasteMatrixErr] = useState<string | null>(null);
   const [pasteFlow, setPasteFlow] = useState("");
@@ -1037,6 +1115,7 @@ export function GraphicsStudio() {
 
   const [barDataMode, setBarDataMode] = useState<DataEntryMode>("manual");
   const [dotDataMode, setDotDataMode] = useState<DataEntryMode>("manual");
+  const [curveDataMode, setCurveDataMode] = useState<DataEntryMode>("manual");
   const [matrixDataMode, setMatrixDataMode] = useState<DataEntryMode>("manual");
   const [flowDataMode, setFlowDataMode] = useState<DataEntryMode>("manual");
 
@@ -1065,6 +1144,29 @@ export function GraphicsStudio() {
     setPasteDot("");
     setDotDataMode("manual");
   }, [pasteDot]);
+
+  const applyCurvePaste = useCallback(() => {
+    setPasteCurveErr(null);
+    const r = parseCurvePaste(pasteCurve);
+    if (!r.ok) {
+      setPasteCurveErr(r.error);
+      return;
+    }
+    setCurveRows(r.rows);
+    const ordered = sortedCurveRows(r.rows);
+    if (ordered.length) {
+      const last = ordered[ordered.length - 1];
+      setCurveForecastStart(last.x);
+      setCurveForecastEnd(last.x + Math.max(4, ordered.length));
+      if (ordered.length >= 2) {
+        const prev = ordered[ordered.length - 2];
+        const dx = last.x - prev.x;
+        if (dx !== 0) setCurveDerivative((last.y - prev.y) / dx);
+      }
+    }
+    setPasteCurve("");
+    setCurveDataMode("manual");
+  }, [pasteCurve]);
 
   const applyMatrixPaste = useCallback(() => {
     setPasteMatrixErr(null);
@@ -1119,6 +1221,23 @@ export function GraphicsStudio() {
         setDotRows(r.rows);
         setPasteDot(tsv);
         setDotDataMode("paste");
+        setStudioSection("graphics");
+      } else if (tab === "curve") {
+        setPasteCurveErr(null);
+        const r = parseCurvePaste(tsv);
+        if (!r.ok) {
+          setPasteCurveErr(r.error);
+          return;
+        }
+        setCurveRows(r.rows);
+        const ordered = sortedCurveRows(r.rows);
+        if (ordered.length) {
+          const last = ordered[ordered.length - 1];
+          setCurveForecastStart(last.x);
+          setCurveForecastEnd(last.x + Math.max(4, ordered.length));
+        }
+        setPasteCurve(tsv);
+        setCurveDataMode("paste");
         setStudioSection("graphics");
       } else if (tab === "matrix") {
         setPasteMatrixErr(null);
@@ -1256,6 +1375,189 @@ export function GraphicsStudio() {
       },
     }),
     [barTitle, barXL, barYL]
+  );
+
+  const curvePrepared = useMemo(() => {
+    const ordered = sortedCurveRows(curveRows);
+    const x0 = finiteNumber(curveForecastStart, 0);
+    const y0 = interpolateYAt(ordered, x0);
+    const observed = ordered
+      .filter((r) => r.x <= x0)
+      .map((r) => ({ x: r.x, y: r.y }));
+    if (!observed.some((p) => p.x === x0)) observed.push({ x: x0, y: y0 });
+    observed.sort((a, b) => a.x - b.x);
+
+    const minX = ordered.length ? Math.min(...ordered.map((r) => r.x), x0) : 0;
+    const naturalMax = ordered.length ? Math.max(...ordered.map((r) => r.x), x0 + 1) : x0 + 1;
+    const endX = Math.max(x0 + 0.25, finiteNumber(curveForecastEnd, naturalMax));
+    const steps = 48;
+    const forecast = Array.from({ length: steps + 1 }, (_, i) => {
+      const x = x0 + ((endX - x0) * i) / steps;
+      return {
+        x,
+        y: forecastY(curveModel, y0, curveDerivative, x - x0, curveCurvature),
+      };
+    }).filter((p) => Number.isFinite(p.y));
+
+    const allY = [...observed, ...forecast].map((p) => p.y).filter(Number.isFinite);
+    const minY = allY.length ? Math.min(...allY) : 0;
+    const maxY = allY.length ? Math.max(...allY) : 1;
+    const yPad = Math.max(1, (maxY - minY || 1) * 0.12);
+
+    return {
+      observed,
+      forecast,
+      boundary: { x: x0, y: y0 },
+      xMin: minX,
+      xMax: endX,
+      yMin: minY - yPad,
+      yMax: maxY + yPad,
+    };
+  }, [
+    curveRows,
+    curveForecastStart,
+    curveForecastEnd,
+    curveModel,
+    curveDerivative,
+    curveCurvature,
+  ]);
+
+  const curveDelimiterPlugin = useMemo<Plugin<"line">>(
+    () => ({
+      id: "studioCurveForecastDelimiter",
+      afterDatasetsDraw(chart) {
+        const xScale = chart.scales.x;
+        const yScale = chart.scales.y;
+        if (!xScale || !yScale) return;
+        const x = xScale.getPixelForValue(curvePrepared.boundary.x);
+        const { ctx, chartArea } = chart;
+        if (x < chartArea.left || x > chartArea.right) return;
+        ctx.save();
+        ctx.strokeStyle = TOK.barPrimary;
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([5, 5]);
+        ctx.beginPath();
+        ctx.moveTo(x, chartArea.top);
+        ctx.lineTo(x, chartArea.bottom);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = TOK.textPrimary;
+        ctx.font = `600 11px ${FONT_SANS}`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "top";
+        ctx.fillText("Forecast starts", x, chartArea.top + 6);
+        ctx.restore();
+      },
+    }),
+    [curvePrepared.boundary.x]
+  );
+
+  const curveData = useMemo(
+    () => ({
+      datasets: [
+        {
+          label: "Observed",
+          data: curvePrepared.observed,
+          borderColor: TOK.barPrimary,
+          backgroundColor: TOK.barPrimary,
+          pointBackgroundColor: TOK.barPrimary,
+          pointBorderColor: "#ffffff",
+          pointBorderWidth: 1,
+          pointRadius: 4,
+          borderWidth: 2.5,
+          tension: 0.22,
+        },
+        {
+          label: `${curveModel[0].toUpperCase()}${curveModel.slice(1)} forecast`,
+          data: curvePrepared.forecast,
+          borderColor: TOK.cell1,
+          backgroundColor: TOK.cell1,
+          pointRadius: 0,
+          borderWidth: 2.5,
+          borderDash: [8, 5],
+          tension: curveModel === "linear" ? 0 : 0.28,
+        },
+      ],
+    }),
+    [curvePrepared, curveModel]
+  );
+
+  const curveOptions = useMemo(
+    () => ({
+      responsive: true,
+      maintainAspectRatio: false,
+      parsing: false as const,
+      devicePixelRatio: typeof window !== "undefined" ? window.devicePixelRatio : 1,
+      plugins: {
+        legend: {
+          display: true,
+          labels: {
+            color: TOK.textPrimary,
+            font: { size: 12, weight: 500, family: FONT_SANS },
+            usePointStyle: true,
+          },
+        },
+        title: {
+          display: Boolean(curveTitle.trim()),
+          text: curveTitle.trim(),
+          color: TOK.textPrimary,
+          font: { size: 18, weight: 700, family: FONT_SANS },
+          padding: { top: 0, bottom: 14 },
+        },
+        tooltip: {
+          backgroundColor: TOK.cardBg,
+          titleColor: TOK.textPrimary,
+          bodyColor: TOK.textPrimary,
+          borderColor: TOK.cardBorder,
+          borderWidth: 1,
+          callbacks: {
+            label(it: TooltipItem<"line">) {
+              const x = typeof it.parsed.x === "number" ? it.parsed.x : 0;
+              const y = typeof it.parsed.y === "number" ? it.parsed.y : 0;
+              return `${it.dataset.label ?? ""}: (${x.toFixed(2)}, ${y.toFixed(2)})`;
+            },
+          },
+        },
+      },
+      scales: {
+        x: {
+          type: "linear" as const,
+          min: curvePrepared.xMin,
+          max: curvePrepared.xMax,
+          ticks: {
+            font: { size: 12, weight: 500, family: FONT_SANS },
+            color: TOK.textPrimary,
+          },
+          grid: { color: TOK.gridLine, drawTicks: false },
+          border: { color: TOK.cardBorder },
+          title: {
+            display: Boolean(curveXL.trim()),
+            text: curveXL.trim(),
+            color: TOK.textPrimary,
+            font: { size: 12, weight: 500, family: FONT_SANS },
+            padding: { top: 10 },
+          },
+        },
+        y: {
+          min: curvePrepared.yMin,
+          max: curvePrepared.yMax,
+          ticks: {
+            font: { size: 12, weight: 500, family: FONT_SANS },
+            color: TOK.textPrimary,
+          },
+          grid: { color: TOK.gridLine, drawTicks: false, lineWidth: 1 },
+          border: { display: false },
+          title: {
+            display: Boolean(curveYL.trim()),
+            text: curveYL.trim(),
+            color: TOK.textPrimary,
+            font: { size: 12, weight: 500, family: FONT_SANS },
+            padding: { bottom: 10 },
+          },
+        },
+      },
+    }),
+    [curvePrepared, curveTitle, curveXL, curveYL]
   );
 
   useEffect(() => {
@@ -1796,6 +2098,52 @@ export function GraphicsStudio() {
     }
   }, [flashCopied]);
 
+  const downloadCurvePng = useCallback(() => {
+    const chart = curveChartRef.current;
+    if (!chart) return;
+    chart.draw();
+    const url = chart.toBase64Image("image/png", 1);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "forecast-curve.png";
+    a.click();
+  }, []);
+
+  const copyCurvePng = useCallback(async () => {
+    const chart = curveChartRef.current;
+    if (!chart || typeof ClipboardItem === "undefined") return;
+    try {
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          "image/png": (async () => {
+            chart.draw();
+            const url = chart.toBase64Image("image/png", 1);
+            const res = await fetch(url);
+            return res.blob();
+          })(),
+        }),
+      ]);
+      flashCopied("curve");
+    } catch (err) {
+      console.error(err);
+      try {
+        chart.draw();
+        const url = chart.toBase64Image("image/png", 1);
+        const res = await fetch(url);
+        const blob = await res.blob();
+        const dl = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = dl;
+        a.download = "forecast-curve.png";
+        a.click();
+        URL.revokeObjectURL(dl);
+        alert("Clipboard blocked copying images — downloaded forecast-curve.png instead.");
+      } catch {
+        alert("Could not copy or save — use Download PNG.");
+      }
+    }
+  }, [flashCopied]);
+
   const downloadFlowSvg = useCallback(() => {
     const wrap = flowWrapRef.current?.querySelector("svg");
     if (!(wrap instanceof SVGSVGElement)) return;
@@ -2044,6 +2392,22 @@ export function GraphicsStudio() {
       ...prev,
       { id: nid("br"), label: `Item ${prev.length + 1}`, c: 0, d: 0 },
     ]);
+
+  const addCurveRow = () =>
+    setCurveRows((prev) => {
+      const ordered = sortedCurveRows(prev);
+      const last = ordered[ordered.length - 1];
+      const prevLast = ordered[ordered.length - 2];
+      const step = last && prevLast ? Math.max(1, last.x - prevLast.x) : 1;
+      return [
+        ...prev,
+        {
+          id: nid("cr"),
+          x: last ? last.x + step : 0,
+          y: last ? last.y : 0,
+        },
+      ];
+    });
 
   function addCommittedFlowEdge() {
     if (!edgeDraft.fromId || !edgeDraft.toId || edgeDraft.fromId === edgeDraft.toId) return;
@@ -2368,6 +2732,259 @@ export function GraphicsStudio() {
                 {copied === "bar" ? (
                   <span className="text-xs font-medium text-emerald-800">Copied</span>
                 ) : null}
+              </div>
+            </div>
+          </section>
+        )}
+
+        {tab === "curve" && (
+          <section className={cn("border bg-white p-6", RAD.outer)} style={{ borderColor: BORDER_TIGHT, borderTop: `3px solid ${TOK.cell1}` }}>
+            <SectionHeader eyebrow="Forecast curve" title="X/Y axis with derivative-constrained forecast" />
+
+            <CaptionFields
+              title={curveTitle}
+              setTitle={setCurveTitle}
+              xLabel={curveXL}
+              setXLabel={setCurveXL}
+              yLabel={curveYL}
+              setYLabel={setCurveYL}
+              footer={curveFoot}
+              setFooter={setCurveFoot}
+              note="Observed points are plotted before the vertical delimiter; the dashed forecast starts at that boundary and uses the derivative you set there."
+            />
+
+            <div className="mt-6 grid gap-3 border-t pt-4 md:grid-cols-5" style={{ borderColor: BORDER_TIGHT }}>
+              <label className="block font-sans md:col-span-1">
+                <span className={labelSpanStyle}>Forecast model</span>
+                <select
+                  className="mt-1 w-full border bg-white px-3 py-2 text-sm outline-none"
+                  style={{ borderColor: BORDER_TIGHT, color: TOK.textPrimary }}
+                  value={curveModel}
+                  onChange={(e) => setCurveModel(e.target.value as CurveModel)}
+                >
+                  <option value="linear">Linear</option>
+                  <option value="exponential">Exponential</option>
+                  <option value="logarithmic">Logarithmic</option>
+                  <option value="quadratic">Quadratic</option>
+                </select>
+              </label>
+              <label className="block font-sans">
+                <span className={labelSpanStyle}>Forecast starts at x</span>
+                <input
+                  type="number"
+                  step="0.1"
+                  className="mt-1 w-full border bg-white px-3 py-2 text-sm outline-none"
+                  style={{ borderColor: BORDER_TIGHT, color: TOK.textPrimary }}
+                  value={curveForecastStart}
+                  onChange={(e) => setCurveForecastStart(Number(e.target.value))}
+                />
+              </label>
+              <label className="block font-sans">
+                <span className={labelSpanStyle}>Forecast ends at x</span>
+                <input
+                  type="number"
+                  step="0.1"
+                  className="mt-1 w-full border bg-white px-3 py-2 text-sm outline-none"
+                  style={{ borderColor: BORDER_TIGHT, color: TOK.textPrimary }}
+                  value={curveForecastEnd}
+                  onChange={(e) => setCurveForecastEnd(Number(e.target.value))}
+                />
+              </label>
+              <label className="block font-sans">
+                <span className={labelSpanStyle}>Derivative at start</span>
+                <input
+                  type="number"
+                  step="0.1"
+                  className="mt-1 w-full border bg-white px-3 py-2 text-sm outline-none"
+                  style={{ borderColor: BORDER_TIGHT, color: TOK.textPrimary }}
+                  value={curveDerivative}
+                  onChange={(e) => setCurveDerivative(Number(e.target.value))}
+                />
+              </label>
+              <label className="block font-sans">
+                <span className={labelSpanStyle}>
+                  {curveModel === "quadratic" ? "Curvature" : curveModel === "logarithmic" ? "Log scale" : "Shape"}
+                </span>
+                <input
+                  type="number"
+                  step="0.05"
+                  disabled={curveModel === "linear" || curveModel === "exponential"}
+                  className="mt-1 w-full border bg-white px-3 py-2 text-sm outline-none disabled:opacity-45"
+                  style={{ borderColor: BORDER_TIGHT, color: TOK.textPrimary }}
+                  value={curveCurvature}
+                  onChange={(e) => setCurveCurvature(Number(e.target.value))}
+                />
+              </label>
+            </div>
+
+            <DataEntryModeTabs
+              idPrefix="studio-curve-data"
+              value={curveDataMode}
+              onChange={setCurveDataMode}
+            />
+
+            <div className="mt-8 grid gap-8 lg:grid-cols-[1fr,minmax(0,420px)]">
+              <div
+                className={cn("overflow-hidden border", RAD.outer)}
+                style={{ borderColor: TOK.cardBorder, background: TOK.cardBg }}
+              >
+                <div className="p-4" style={{ background: TOK.pageBg }}>
+                  <div
+                    className="flex aspect-[16/9] min-h-[260px] w-full items-center justify-center border bg-white px-2 py-2"
+                    style={{ borderColor: TOK.cardBorder }}
+                  >
+                    {curveRows.length > 0 ? (
+                      <Line
+                        ref={curveChartRef}
+                        data={curveData}
+                        options={curveOptions}
+                        plugins={[curveDelimiterPlugin]}
+                      />
+                    ) : (
+                      <p style={{ color: COL.label }} className="text-sm">
+                        Add at least one x/y point.
+                      </p>
+                    )}
+                  </div>
+                  {curveFoot.trim() && (
+                    <p className="mt-4 text-center font-serif-display italic text-[14px] text-zinc-600">
+                      {curveFoot}
+                    </p>
+                  )}
+                </div>
+                <div className="flex flex-wrap items-center gap-2 border-t p-4" style={{ borderColor: BORDER_TIGHT }}>
+                  <button
+                    type="button"
+                    onClick={downloadCurvePng}
+                    className="inline-flex items-center gap-2 border px-3 py-2 font-sans text-xs font-medium"
+                    style={{ borderColor: TOK.cardBorder, background: TOK.pageBg, color: TOK.textPrimary }}
+                    disabled={!curveRows.length}
+                  >
+                    <Download className="size-4" aria-hidden /> Download PNG
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void copyCurvePng()}
+                    className="inline-flex items-center gap-2 border bg-white px-3 py-2 font-sans text-xs font-medium text-zinc-800"
+                    style={{ borderColor: BORDER_TIGHT }}
+                    disabled={!curveRows.length || typeof ClipboardItem === "undefined"}
+                    title="Copy raster graphic (solid white background)"
+                  >
+                    <Copy className="size-4" aria-hidden /> Copy PNG
+                  </button>
+                  {copied === "curve" ? (
+                    <span className="text-xs font-medium text-emerald-800">Copied</span>
+                  ) : null}
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <div
+                  id="studio-curve-data-panel-manual"
+                  role="tabpanel"
+                  aria-labelledby="studio-curve-data-tab-manual"
+                  hidden={curveDataMode !== "manual"}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className={labelSpanStyle}>Observed x/y points</span>
+                    <button
+                      type="button"
+                      onClick={addCurveRow}
+                      className="inline-flex items-center gap-2 border bg-white px-3 py-2 text-xs font-medium"
+                      style={{ borderColor: BORDER_TIGHT, color: TOK.textPrimary }}
+                    >
+                      <PlusCircle className="size-4" /> Add point
+                    </button>
+                  </div>
+                  <div className="mt-3 space-y-2">
+                    {curveRows.map((row, idx) => (
+                      <div
+                        key={row.id}
+                        className="grid grid-cols-[1fr_1fr_auto] items-end gap-2 border p-3"
+                        style={{ borderColor: BORDER_TIGHT }}
+                      >
+                        <label className="block">
+                          <span className="text-[10px] font-medium uppercase tracking-[0.08em]" style={{ color: "rgba(139, 90, 43, 0.72)" }}>
+                            x {idx + 1}
+                          </span>
+                          <input
+                            type="number"
+                            step="0.1"
+                            className="mt-1 w-full border bg-[#fcf8f3] px-3 py-2 text-sm outline-none"
+                            style={{ borderColor: BORDER_TIGHT, color: TOK.textPrimary }}
+                            value={row.x}
+                            onChange={(e) =>
+                              setCurveRows((rs) =>
+                                rs.map((r) =>
+                                  r.id === row.id ? { ...r, x: Number(e.target.value) } : r
+                                )
+                              )
+                            }
+                          />
+                        </label>
+                        <label className="block">
+                          <span className="text-[10px] font-medium uppercase tracking-[0.08em]" style={{ color: "rgba(139, 90, 43, 0.72)" }}>
+                            y {idx + 1}
+                          </span>
+                          <input
+                            type="number"
+                            step="0.1"
+                            className="mt-1 w-full border bg-[#fcf8f3] px-3 py-2 text-sm outline-none"
+                            style={{ borderColor: BORDER_TIGHT, color: TOK.textPrimary }}
+                            value={row.y}
+                            onChange={(e) =>
+                              setCurveRows((rs) =>
+                                rs.map((r) =>
+                                  r.id === row.id ? { ...r, y: Number(e.target.value) } : r
+                                )
+                              )
+                            }
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          className="border px-2 py-2 text-zinc-500"
+                          style={{ borderColor: BORDER_TIGHT }}
+                          onClick={() => setCurveRows((rs) => rs.filter((r) => r.id !== row.id))}
+                          disabled={curveRows.length <= 1}
+                          aria-label="Remove point"
+                        >
+                          <Trash2 className="size-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div
+                  id="studio-curve-data-panel-paste"
+                  role="tabpanel"
+                  aria-labelledby="studio-curve-data-tab-paste"
+                  hidden={curveDataMode !== "paste"}
+                  className="border-t pt-4"
+                  style={{ borderColor: BORDER_TIGHT }}
+                >
+                  <PasteDataBlock
+                    embedded
+                    chartKind="curve"
+                    id="studio-paste-curve"
+                    hint={
+                      <>
+                        Two numeric columns: <strong>x</strong> and <strong>y</strong>. Optional header row is
+                        allowed. The forecast start, derivative, and model are set above after paste.
+                      </>
+                    }
+                    example={PASTE_PLACEHOLDER_CURVE}
+                    value={pasteCurve}
+                    onChange={setPasteCurve}
+                    onApply={applyCurvePaste}
+                    onClear={() => {
+                      setPasteCurve("");
+                      setPasteCurveErr(null);
+                    }}
+                    error={pasteCurveErr}
+                  />
+                </div>
               </div>
             </div>
           </section>

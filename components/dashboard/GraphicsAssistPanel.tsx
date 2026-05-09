@@ -26,6 +26,7 @@ const KIND_LABEL: Record<ChartPasteKind, string> = {
   dot: "Dot plot",
   matrix: "Matrix",
   flow: "Flow",
+  curve: "Forecast curve",
 };
 
 function fileToBase64Payload(file: File): Promise<{ base64: string; mimeType: string }> {

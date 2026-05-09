@@ -46,6 +46,17 @@ Mermaid-style (optional; same as studio preview):
 - Edges: fromId --> toId OR fromId -->|"label"| toId
 
 Use ONE format per response — both normalize to the same diagram.`,
+
+  curve: `FORECAST CURVE paste format (TAB-separated preferred; comma OK if cells have no commas):
+- Optional HEADER row: x<TAB>y or Date/Time<TAB>Value.
+- Each DATA row: x<TAB>y (two numeric columns).
+- x values should be numeric positions on the horizontal axis. Use sequential periods (0, 1, 2...) when the source labels are dates or categories.
+- Include observed/historical rows only. Forecast model, forecast start, and derivative are configured in the studio UI.
+Example:
+x\ty
+0\t42
+1\t47
+2\t53`,
 };
 
 export function buildAssistSystemPrompt(kind: ChartPasteKind): string {
