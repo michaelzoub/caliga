@@ -20,12 +20,12 @@ export function Header() {
         <Container className="relative flex h-14 min-w-0 items-center gap-3 md:h-16 md:gap-4">
           <Link
             href="/"
-            className="relative z-[2] flex h-full items-center outline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-accent-cyan)]"
+            className="relative z-[2] flex h-full items-center outline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#BC7C3C]"
             aria-label="Caliga home"
           >
             <span
               className="font-serif-display italic tracking-tight leading-none select-none"
-              style={{ fontSize: "1.75rem", color: "#c47a30" }}
+              style={{ fontSize: "1.75rem", color: "#BC7C3C" }}
             >
               Caliga
             </span>
@@ -38,11 +38,11 @@ export function Header() {
               <Link
                 key={item.href}
                 href={item.href}
-                className="flex items-center gap-1 font-mono text-[11px] uppercase tracking-[0.18em] text-zinc-600 transition-colors hover:text-zinc-900"
+                className="flex items-center gap-1 font-mono text-[11px] uppercase tracking-[0.18em] text-[#111111] transition-colors hover:text-[#BC7C3C]"
               >
                 {item.label}
                 {"hasCaret" in item && item.hasCaret ? (
-                  <span className="text-[9px] text-zinc-400" aria-hidden>
+                  <span className="text-[9px] text-[#BC7C3C]" aria-hidden>
                     ▾
                   </span>
                 ) : null}

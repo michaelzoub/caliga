@@ -51,21 +51,21 @@ export function Footer() {
             <div className="min-w-0 overflow-hidden">
               <p
                 className="font-serif-display italic leading-[0.92] tracking-tight select-none"
-                style={{ fontSize: "clamp(4.5rem, 16vw, 15rem)", color: "#1e1e1e" }}
+                style={{ fontSize: "clamp(4.5rem, 16vw, 15rem)", color: "#BC7C3C" }}
                 aria-hidden
               >
                 Caliga
               </p>
 
               <div className="mt-8 max-w-lg space-y-3">
-                <p className="font-serif-display text-xs leading-relaxed text-zinc-500">
+                <p className="font-serif-display text-xs leading-relaxed text-white">
                   Caliga publishes research and commentary for informational and educational
                   purposes only and does not provide investment advice, investment recommendations,
                   or an offer or solicitation to buy or sell any security or financial instrument.
                   Any investment activity is high risk; do your own diligence and consult qualified
                   advisors.
                 </p>
-                <p className="font-mono text-[10px] uppercase tracking-wider text-zinc-600">
+                <p className="font-mono text-[10px] uppercase tracking-wider text-[#BC7C3C]">
                   © {new Date().getFullYear()} Caliga. All rights reserved.
                 </p>
               </div>
@@ -75,17 +75,17 @@ export function Footer() {
             <div className="grid grid-cols-2 gap-x-10 gap-y-10">
               {columns.map((col) => (
                 <div key={col.title}>
-                  <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-zinc-500">
+                  <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-[#BC7C3C]">
                     {col.title}
                   </p>
                   <nav className="mt-4 space-y-2" aria-label={col.title}>
                     {col.links.map((l) => {
                       const cls =
-                        "block font-sans text-sm font-medium text-zinc-500 transition-colors hover:text-zinc-300";
+                        "block font-sans text-sm font-medium text-white transition-colors hover:text-[#BC7C3C]";
 
                       if ("disabled" in l && l.disabled) {
                         return (
-                          <span key={l.label} className="block font-sans text-sm text-zinc-600">
+                          <span key={l.label} className="block font-sans text-sm text-[#BC7C3C]">
                             {l.label}
                           </span>
                         );
@@ -117,13 +117,13 @@ export function Footer() {
 
               {/* Contact — 4th column, same vertical alignment as nav */}
               <div>
-                <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-zinc-500">
+                <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-[#BC7C3C]">
                   Contact —
                 </p>
                 <div className="mt-4 space-y-2">
                   <a
                     href="mailto:hello@caliga.xyz"
-                    className="block font-sans text-sm font-medium text-zinc-500 underline decoration-zinc-700 underline-offset-4 transition-colors hover:text-zinc-300 hover:decoration-zinc-500"
+                    className="block font-sans text-sm font-medium text-white underline decoration-[#BC7C3C] underline-offset-4 transition-colors hover:text-[#BC7C3C] hover:decoration-white"
                   >
                     hello@caliga.xyz
                   </a>
@@ -131,7 +131,7 @@ export function Footer() {
                     href={SOCIAL_X_URL}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="block font-sans text-sm font-medium text-zinc-500 underline decoration-zinc-700 underline-offset-4 transition-colors hover:text-zinc-300 hover:decoration-zinc-500"
+                    className="block font-sans text-sm font-medium text-white underline decoration-[#BC7C3C] underline-offset-4 transition-colors hover:text-[#BC7C3C] hover:decoration-white"
                   >
                     {SOCIAL_X_HANDLE_DISPLAY}
                   </a>

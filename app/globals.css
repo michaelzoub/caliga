@@ -4,25 +4,25 @@
 
 :root {
   --background: #ffffff;
-  --foreground: #18181b;
-  --color-muted: #71717a;
+  --foreground: #111111;
+  --color-muted: #111111;
   --color-tag-bg: rgba(0, 0, 0, 0.04);
   --color-tag-border: rgba(0, 0, 0, 0.12);
-  --color-accent-cyan: #0891b2;
-  --color-accent-purple: #7c3aed;
+  --color-accent-cyan: #BC7C3C;
+  --color-accent-purple: #111111;
   --gradient-brand: linear-gradient(
     115deg,
-    #0891b2 0%,
-    #22d3ee 45%,
-    #0e7490 78%,
-    #67e8f9 100%
+    #111111 0%,
+    #BC7C3C 45%,
+    #111111 78%,
+    #BC7C3C 100%
   );
-  --gradient-button: linear-gradient(105deg, #22d3ee 0%, #a5f3fc 55%, #ecfeff 100%);
+  --gradient-button: linear-gradient(105deg, #111111 0%, #BC7C3C 100%);
   --gradient-border: linear-gradient(
     135deg,
-    rgba(8, 145, 178, 0.55),
+    rgba(17, 17, 17, 0.55),
     rgba(255, 255, 255, 0.9),
-    rgba(34, 211, 238, 0.4)
+    rgba(188, 124, 60, 0.4)
   );
   --radius: 0;
 }
@@ -76,8 +76,8 @@ body {
 
 .mesh-bg {
   background-image:
-    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(8, 145, 178, 0.06), transparent),
-    radial-gradient(ellipse 60% 40% at 100% 0%, rgba(124, 58, 237, 0.04), transparent);
+    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(17, 17, 17, 0.04), transparent),
+    radial-gradient(ellipse 60% 40% at 100% 0%, rgba(188, 124, 60, 0.04), transparent);
 }
 
 .hero-surface {

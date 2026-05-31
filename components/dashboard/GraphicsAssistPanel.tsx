@@ -13,16 +13,17 @@ import type { ChartPasteKind } from "@/lib/graphics-paste-parsers";
 import { cn } from "@/lib/utils";
 
 const TOK = {
-  textPrimary: "#8B5A2B",
-  textMuted: "rgba(139, 90, 43, 0.72)",
-  cardBorder: "#E8E4DC",
-  pageTint: "#F9F7F2",
+  textPrimary: "#111111",
+  textMuted: "#BC7C3C",
+  cardBorder: "#D8D8D8",
+  pageTint: "#FFFFFF",
 } as const;
 
 const RAD = { outer: "rounded-none" as const };
 
 const KIND_LABEL: Record<ChartPasteKind, string> = {
   bar: "Bar chart",
+  hbar: "Horizontal bar",
   dot: "Dot plot",
   matrix: "Matrix",
   flow: "Flow",
@@ -230,7 +231,7 @@ export function GraphicsAssistPanel({
         className={cn(
           "mt-3 border border-dashed px-3 py-3 text-[12px] transition-colors",
           RAD.outer,
-          dragActive ? "bg-[#fcf8f3]" : "bg-white"
+          dragActive ? "bg-[#F5F5F5]" : "bg-white"
         )}
         style={{
           borderColor: dragActive ? TOK.textPrimary : TOK.cardBorder,
@@ -272,7 +273,7 @@ export function GraphicsAssistPanel({
         </div>
       </div>
       {imageErr ? (
-        <p className="mt-2 text-[13px] leading-snug text-red-600" role="alert">
+        <p className="mt-2 text-[13px] leading-snug text-[#BC7C3C]" role="alert">
           {imageErr}
         </p>
       ) : null}
@@ -298,7 +299,7 @@ export function GraphicsAssistPanel({
       {error && (
         <p
           className="mt-2 text-[13px] leading-snug"
-          style={{ color: "#b45309" }}
+          style={{ color: TOK.textMuted }}
           role="alert"
         >
           {error}
@@ -316,7 +317,7 @@ export function GraphicsAssistPanel({
           style={{
             borderColor: TOK.textPrimary,
             background: busy || !message.trim() ? "#f4f4f5" : TOK.textPrimary,
-            color: busy || !message.trim() ? "#71717a" : "#fff",
+            color: busy || !message.trim() ? TOK.textPrimary : "#fff",
           }}
         >
           {loading ? (

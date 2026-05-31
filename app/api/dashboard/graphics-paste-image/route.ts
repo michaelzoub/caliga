@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
   }
 
   const chartKind = body.chartKind as ChartPasteKind | undefined;
-  const kinds: ChartPasteKind[] = ["bar", "dot", "matrix", "flow", "curve"];
+  const kinds: ChartPasteKind[] = ["bar", "hbar", "dot", "matrix", "flow", "curve"];
   if (!chartKind || !kinds.includes(chartKind)) {
     return NextResponse.json({ error: "Invalid chartKind" }, { status: 400 });
   }

@@ -6,7 +6,8 @@
 export type MatrixCol = { id: string; label: string };
 export type MatrixRow = { id: string; label: string; cells: number[] };
 
-export type BarRow = { id: string; label: string; c: number; d: number };
+export type BarRow = { id: string; label: string; values: number[] };
+export type HBarRow = { id: string; label: string; value: number };
 export type DotRow = {
   id: string;
   label: string;
@@ -24,7 +25,7 @@ export type FlowNode = {
 };
 export type FlowEdge = { id: string; fromId: string; toId: string; label: string };
 
-export type ChartPasteKind = "bar" | "dot" | "matrix" | "flow" | "curve";
+export type ChartPasteKind = "bar" | "hbar" | "dot" | "matrix" | "flow" | "curve";
 
 let idSeq = 0;
 /** Row/node ids for studio tables and paste rows (client + server parsers). */
@@ -54,7 +55,7 @@ function clampScore01(s: string): number | null {
 }
 
 export type BarPasteResult =
-  | { ok: true; rows: BarRow[]; legendC?: string; legendD?: string }
+  | { ok: true; rows: BarRow[]; legends?: string[] }
   | { ok: false; error: string };
 
 export function parseBarPaste(text: string): BarPasteResult {
@@ -62,45 +63,95 @@ export function parseBarPaste(text: string): BarPasteResult {
   if (!lines.length) return { ok: false, error: "Paste at least one data row." };
 
   let i0 = 0;
-  let legendC: string | undefined;
-  let legendD: string | undefined;
+  let legends: string[] | undefined;
   const head = splitDataLine(lines[0]);
   if (head.length >= 3) {
-    const n1 = parseNumberLoose(head[1]);
-    const n2 = parseNumberLoose(head[2]);
-    if (n1 === null || n2 === null) {
-      legendC = head[1] || undefined;
-      legendD = head[2] || undefined;
+    const hasAnyNonNumericSeries = head.slice(1).some((cell) => parseNumberLoose(cell) === null);
+    if (hasAnyNonNumericSeries) {
+      legends = head.slice(1).map((cell, i) => cell || `Series ${i + 1}`);
       i0 = 1;
     }
   }
 
   const rows: BarRow[] = [];
+  let seriesCount = legends?.length ?? 0;
   for (let i = i0; i < lines.length; i++) {
     const p = splitDataLine(lines[i]);
     if (p.length < 3) {
       return {
         ok: false,
-        error: `Line ${i + 1}: need 3 columns — label, first series, second series (tab or comma).`,
+        error: `Line ${i + 1}: need at least 3 columns — label and two or more series values (tab or comma).`,
       };
     }
-    const c = parseNumberLoose(p[1]);
-    const d = parseNumberLoose(p[2]);
-    if (c === null || d === null) {
+    const values = p.slice(1).map(parseNumberLoose);
+    const badIdx = values.findIndex((v) => v === null);
+    if (badIdx !== -1) {
       return {
         ok: false,
-        error: `Line ${i + 1}: columns 2 and 3 must be numbers (got "${p[1]}", "${p[2]}").`,
+        error: `Line ${i + 1}: column ${badIdx + 2} must be a number (got "${p[badIdx + 1]}").`,
+      };
+    }
+    if (seriesCount === 0) seriesCount = values.length;
+    if (values.length !== seriesCount) {
+      return {
+        ok: false,
+        error: `Line ${i + 1}: expected ${seriesCount + 1} columns to match the other rows.`,
       };
     }
     rows.push({
       id: nid("br"),
       label: p[0] || `Category ${i + 1}`,
-      c: Math.round(c),
-      d: Math.round(d),
+      values: values.map((v) => Math.round(v ?? 0)),
     });
   }
   if (!rows.length) return { ok: false, error: "No numeric data rows found." };
-  return { ok: true, rows, legendC, legendD };
+  return { ok: true, rows, legends };
+}
+
+export type HBarPasteResult =
+  | { ok: true; rows: HBarRow[] }
+  | { ok: false; error: string };
+
+function parsePercentLoose(s: string): number | null {
+  const t = String(s).trim().replace(/%$/, "");
+  const n = Number(t.replace(/,/g, ""));
+  return Number.isFinite(n) ? n : null;
+}
+
+export function parseHBarPaste(text: string): HBarPasteResult {
+  const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  if (!lines.length) return { ok: false, error: "Paste at least one data row." };
+
+  let i0 = 0;
+  const head = splitDataLine(lines[0]);
+  if (head.length >= 2 && parsePercentLoose(head[1]) === null) {
+    i0 = 1;
+  }
+
+  const rows: HBarRow[] = [];
+  for (let i = i0; i < lines.length; i++) {
+    const p = splitDataLine(lines[i]);
+    if (p.length < 2) {
+      return {
+        ok: false,
+        error: `Line ${i + 1}: need 2 columns — label and value (tab or comma).`,
+      };
+    }
+    const value = parsePercentLoose(p[1]);
+    if (value === null) {
+      return {
+        ok: false,
+        error: `Line ${i + 1}: column 2 must be a number (got "${p[1]}").`,
+      };
+    }
+    rows.push({
+      id: nid("hr"),
+      label: p[0] || `Category ${i + 1}`,
+      value,
+    });
+  }
+  if (!rows.length) return { ok: false, error: "No numeric data rows found." };
+  return { ok: true, rows };
 }
 
 export type DotPasteResult =
@@ -519,6 +570,10 @@ export function validatePasteForChart(
   switch (kind) {
     case "bar": {
       const r = parseBarPaste(t);
+      return r.ok ? { ok: true } : r;
+    }
+    case "hbar": {
+      const r = parseHBarPaste(t);
       return r.ok ? { ok: true } : r;
     }
     case "dot": {

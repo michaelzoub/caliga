@@ -1,6 +1,6 @@
 "use client";
 
-import type { Chart, Plugin } from "chart.js";
+import type { Chart, Plugin, ScriptableContext } from "chart.js";
 import {
   BarElement,
   CategoryScale,
@@ -15,6 +15,7 @@ import {
 import {
   ArrowDownToLine,
   BarChart3,
+  ChartBar,
   CircleDot,
   Copy,
   Download,
@@ -48,11 +49,13 @@ import { GraphicsAssistPanel } from "@/components/dashboard/GraphicsAssistPanel"
 import {
   nid,
   parseBarPaste,
+  parseHBarPaste,
   parseDotPaste,
   parseMatrixPaste,
   parseFlowPaste,
   parseCurvePaste,
   type BarRow,
+  type HBarRow,
   type ChartPasteKind,
   type CurveRow,
   type DotRow,
@@ -66,20 +69,20 @@ import { cn } from "@/lib/utils";
 
 export type { FlowNode, FlowEdge, FlowShape } from "@/lib/graphics-paste-parsers";
 
-/** Editorial research chart tokens (do not substitute near-greens / near-corals). */
+/** Caliga research chart tokens: white field, grayscale structure, sparse rust-orange marks. */
 const TOK = {
-  pageBg: "#F9F7F2",
+  pageBg: "#FFFFFF",
   cardBg: "#FFFFFF",
-  cardBorder: "#E8E4DC",
-  cell0: "#EFEBE0",
-  cell1: "#80CBC4",
-  cell2: "#EF6C51",
-  gutter: "#F9F7F2",
-  textPrimary: "#8B5A2B",
-  textSecondary: "rgba(139, 90, 43, 0.72)",
-  barPrimary: "#C87137",
-  barSecondary: "#E6B87D",
-  gridLine: "rgba(236, 234, 230, 0.55)",
+  cardBorder: "#D8D8D8",
+  cell0: "#F0F0F0",
+  cell1: "#BDBDBD",
+  cell2: "#BC7C3C",
+  gutter: "#FFFFFF",
+  textPrimary: "#111111",
+  textSecondary: "#BC7C3C",
+  barPrimary: "#BC7C3C",
+  barSecondary: "#111111",
+  gridLine: "rgba(17, 17, 17, 0.12)",
   plotBg: "#FFFFFF",
 } as const;
 
@@ -89,15 +92,89 @@ const FONT_SANS =
 /** Exported chart plot area — solid white. */
 const EXPORT_BG = TOK.plotBg;
 
-/** Solid white canvas behind bars so PNG / clipboard export is never transparent. */
-const chartWhiteBgPlugin: Plugin<"bar" | "line"> = {
-  id: "studioBarWhiteBg",
+type StudioPlotBgOptions = { studioPlotBg?: string };
+
+function rawChartPluginOptions(chart: Chart): Record<string, unknown> | undefined {
+  return (
+    chart.config as unknown as {
+      _config?: { options?: { plugins?: Record<string, unknown> } };
+    }
+  )._config?.options?.plugins;
+}
+
+/** Solid plot background so PNG / clipboard export is never transparent. */
+const chartPlotBgPlugin: Plugin<"bar" | "line"> = {
+  id: "studioPlotBg",
   beforeDraw(chart) {
+    const bg =
+      (rawChartPluginOptions(chart)?.studioPlotBg as
+        | StudioPlotBgOptions["studioPlotBg"]
+        | undefined) ?? EXPORT_BG;
     const { ctx } = chart;
     ctx.save();
     ctx.globalCompositeOperation = "destination-over";
-    ctx.fillStyle = EXPORT_BG;
+    ctx.fillStyle = bg;
     ctx.fillRect(0, 0, chart.width, chart.height);
+    ctx.restore();
+  },
+};
+
+/** Dark horizontal-bar chart tokens (survey / report style). */
+const HBAR_TOK = {
+  plotBg: "#0A0A0A",
+  title: "#FFFFFF",
+  label: "#FFFFFF",
+  value: "#BC7C3C",
+  grid: "rgba(255, 255, 255, 0.14)",
+  axis: "rgba(255, 255, 255, 0.24)",
+  gradStart: "#BC7C3C",
+  gradEnd: "#FFFFFF",
+  barThickness: 22,
+} as const;
+
+function hbarBarGradient(
+  chart: Chart<"bar">,
+  chartArea: { left: number; right: number },
+  barX: number
+) {
+  const { ctx } = chart;
+  const gradient = ctx.createLinearGradient(chartArea.left, 0, barX, 0);
+  gradient.addColorStop(0, HBAR_TOK.gradStart);
+  gradient.addColorStop(1, HBAR_TOK.gradEnd);
+  return gradient;
+}
+
+function formatHbarValue(value: number, suffix: string, decimals: number) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return "";
+  const body = decimals >= 0 ? n.toFixed(decimals) : String(n);
+  return suffix ? `${body}${suffix}` : body;
+}
+
+const hbarValueLabelsPlugin: Plugin<"bar"> = {
+  id: "hbarValueLabels",
+  afterDatasetsDraw(chart) {
+    const opts = rawChartPluginOptions(chart)?.hbarValueLabels as
+      | { suffix?: string; decimals?: number }
+      | undefined;
+    const suffix = opts?.suffix ?? "%";
+    const decimals = opts?.decimals ?? 1;
+    const meta = chart.getDatasetMeta(0);
+    if (!meta?.data?.length) return;
+    const dataset = chart.data.datasets[0];
+    const { ctx } = chart;
+    ctx.save();
+    ctx.fillStyle = HBAR_TOK.value;
+    ctx.font = `500 12px ${FONT_SANS}`;
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    meta.data.forEach((el, i) => {
+      const raw = dataset.data[i];
+      const value = typeof raw === "number" ? raw : Number(raw);
+      if (!Number.isFinite(value)) return;
+      const bar = el as BarElement;
+      ctx.fillText(formatHbarValue(value, suffix, decimals), bar.x + 8, bar.y);
+    });
     ctx.restore();
   },
 };
@@ -110,7 +187,8 @@ ChartJS.register(
   PointElement,
   Tooltip,
   Title,
-  chartWhiteBgPlugin
+  chartPlotBgPlugin,
+  hbarValueLabelsPlugin
 );
 
 function ensureSvgOpaqueWhiteRoot(svg: SVGSVGElement) {
@@ -254,8 +332,8 @@ const COL = {
   dPrimeDot: TOK.cell1,
   baselineDot: TOK.textPrimary,
   cPrimeDot: TOK.barPrimary,
-  connector: "rgba(139, 90, 43, 0.22)",
-  zeroLine: "rgba(139, 90, 43, 0.38)",
+  connector: "rgba(17, 17, 17, 0.22)",
+  zeroLine: "rgba(17, 17, 17, 0.38)",
   axisTick: TOK.textPrimary,
   gridLine: TOK.gridLine,
   ruleHome: TOK.cardBorder,
@@ -401,16 +479,25 @@ async function flowCompositeToPngBlob(
   });
 }
 
-type TabId = "bar" | "dot" | "flow" | "matrix" | "curve";
+type TabId = "bar" | "hbar" | "dot" | "flow" | "matrix" | "curve";
 
 /** Top-level studio area: chart editors vs LLM assist. */
 type StudioSectionTab = "graphics" | "assist";
 
 type DataEntryMode = "manual" | "paste";
 
-const PASTE_PLACEHOLDER_BAR = `Quarter\tSeries A\tSeries B
-Q1\t42\t33
-Q2\t52\t46`;
+const PASTE_PLACEHOLDER_BAR = `Quarter\tSeries A\tSeries B\tSeries C
+Q1\t42\t33\t28
+Q2\t52\t46\t39`;
+
+const PASTE_PLACEHOLDER_HBAR = `Use case\tShare
+Customer service\t26.5
+Research & data analysis\t24.4
+Internal productivity\t17.7
+Code generation\t9.8
+Content generation\t9.0
+Sales/marketing automation\t6.0
+Other\t6.7`;
 
 const PASTE_PLACEHOLDER_DOT = `Label\tBaseline\tD'\tC'
 Player A\t22\t45\t72`;
@@ -544,7 +631,13 @@ function SectionHeader({ eyebrow, title }: { eyebrow: string; title: string }) {
   );
 }
 
-function CustomBarLegend({ cLegend, dLegend }: { cLegend: string; dLegend: string }) {
+const BAR_SERIES_COLORS = ["#BC7C3C", "#111111", "#8C8C8C", "#D8D8D8", "#6B6B6B"] as const;
+
+function barSeriesColor(index: number) {
+  return BAR_SERIES_COLORS[index % BAR_SERIES_COLORS.length];
+}
+
+function CustomBarLegend({ legends }: { legends: string[] }) {
   return (
     <div
       className={cn("mt-4 flex flex-wrap gap-6 font-sans", RAD.outer)}
@@ -554,22 +647,16 @@ function CustomBarLegend({ cLegend, dLegend }: { cLegend: string; dLegend: strin
         color: TOK.textPrimary,
       }}
     >
-      <span className="inline-flex items-center gap-2">
-        <span
-          className="inline-block shrink-0 rounded-none"
-          style={{ width: 14, height: 14, backgroundColor: TOK.barPrimary }}
-          aria-hidden
-        />
-        {cLegend}
-      </span>
-      <span className="inline-flex items-center gap-2">
-        <span
-          className="inline-block shrink-0 rounded-none"
-          style={{ width: 14, height: 14, backgroundColor: TOK.barSecondary }}
-          aria-hidden
-        />
-        {dLegend}
-      </span>
+      {legends.map((legend, index) => (
+        <span key={`${legend}-${index}`} className="inline-flex items-center gap-2">
+          <span
+            className="inline-block shrink-0 rounded-none"
+            style={{ width: 14, height: 14, backgroundColor: barSeriesColor(index) }}
+            aria-hidden
+          />
+          {legend || `Series ${index + 1}`}
+        </span>
+      ))}
     </div>
   );
 }
@@ -596,13 +683,13 @@ function CaptionFields({
   note?: string;
 }) {
   const fld = cn(
-    "mt-1 w-full border bg-white px-3 py-2 text-sm text-[#8B5A2B] outline-none",
+    "mt-1 w-full border bg-white px-3 py-2 text-sm text-[#111111] outline-none",
     RAD.outer
   );
   return (
     <div className="space-y-3 border-t pt-4 font-sans" style={{ borderColor: BORDER_TIGHT }}>
       {note && (
-        <p className="text-[12px] leading-relaxed text-zinc-600">{note}</p>
+        <p className="text-[12px] leading-relaxed text-[#111111]">{note}</p>
       )}
       <label className="block">
         <span className={labelSpanStyle}>Graphic title</span>
@@ -633,7 +720,7 @@ function CaptionFields({
 }
 
 const labelSpanStyle =
-  "text-[11px] font-medium uppercase tracking-[0.1em] block text-[#8B5A2B]";
+  "text-[11px] font-medium uppercase tracking-[0.1em] block text-[#111111]";
 
 function DataEntryModeTabs({
   idPrefix,
@@ -656,8 +743,8 @@ function DataEntryModeTabs({
         "inline-flex min-h-[40px] flex-1 items-center justify-center border px-4 py-2 font-sans text-xs font-medium transition-colors sm:text-[13px]",
         RAD.outer,
         value === mode
-          ? "border-[#8B5A2B] bg-[#8B5A2B] text-white"
-          : "border-[#E8E4DC] bg-white text-zinc-800"
+          ? "border-[#111111] bg-[#111111] text-white"
+          : "border-[#D8D8D8] bg-white text-[#111111]"
       )}
       style={value === mode ? undefined : { color: TOK.textPrimary }}
       onClick={() => onChange(mode)}
@@ -825,12 +912,12 @@ function PasteDataBlock({
       ) : null}
       <div
         className={cn("text-[12px] leading-relaxed", embedded ? "mt-0" : "mt-2")}
-        style={{ color: "rgba(139, 90, 43, 0.75)" }}
+        style={{ color: "#BC7C3C" }}
       >
         {hint}
       </div>
       {chartKind ? (
-        <p className="mt-2 text-[12px] leading-relaxed" style={{ color: "rgba(139, 90, 43, 0.75)" }}>
+        <p className="mt-2 text-[12px] leading-relaxed" style={{ color: "#BC7C3C" }}>
           <strong>Image:</strong> paste a screenshot (⌘V / Ctrl+V), drop a file here, or import — text
           fills the box below (uses the same validation as typed paste; requires{" "}
           <code className="font-mono text-[11px]">OPENAI_API_KEY</code> on the server).
@@ -841,7 +928,7 @@ function PasteDataBlock({
           className={cn(
             "mt-3 border border-dashed px-3 py-3 font-sans text-[12px] transition-colors",
             RAD.outer,
-            dragActive ? "bg-[#fcf8f3]" : "bg-white"
+            dragActive ? "bg-[#F5F5F5]" : "bg-white"
           )}
           style={{
             borderColor: dragActive ? TOK.textPrimary : TOK.cardBorder,
@@ -884,7 +971,7 @@ function PasteDataBlock({
         </div>
       ) : null}
       {imageErr ? (
-        <p className="mt-2 text-[12px] text-red-600" role="alert">
+        <p className="mt-2 text-[12px] text-[#BC7C3C]" role="alert">
           {imageErr}
         </p>
       ) : null}
@@ -899,7 +986,7 @@ function PasteDataBlock({
         onPaste={chartKind ? onPasteImage : undefined}
       />
       {error ? (
-        <p className="mt-2 text-[12px] text-red-600" role="alert">
+        <p className="mt-2 text-[12px] text-[#BC7C3C]" role="alert">
           {error}
         </p>
       ) : null}
@@ -933,15 +1020,17 @@ function StepControl({
   value,
   min,
   max,
+  step = 1,
   onChange,
 }: {
   value: number;
   min?: number;
   max?: number;
+  step?: number;
   onChange: (n: number) => void;
 }) {
-  const dec = () => onChange(Math.max(min ?? Number.NEGATIVE_INFINITY, value - 1));
-  const inc = () => onChange(Math.min(max ?? Number.POSITIVE_INFINITY, value + 1));
+  const dec = () => onChange(Math.max(min ?? Number.NEGATIVE_INFINITY, value - step));
+  const inc = () => onChange(Math.min(max ?? Number.POSITIVE_INFINITY, value + step));
   return (
     <div
       className="inline-flex border border-[#cccccc]"
@@ -949,18 +1038,18 @@ function StepControl({
     >
       <button
         type="button"
-        className="px-2 py-2 text-[#8B5A2B] hover:bg-[#F9F7F2]"
+        className="px-2 py-2 text-[#111111] hover:bg-[#FFFFFF]"
         onClick={dec}
         aria-label="Decrease by one"
       >
         <Minus className="size-4" aria-hidden strokeWidth={1.75} />
       </button>
       <span className="min-w-[2.75rem] select-none px-2 py-2 text-center text-sm tabular-nums">
-        {value}
+        {step < 1 ? value.toFixed(1) : value}
       </span>
       <button
         type="button"
-        className="px-2 py-2 text-[#8B5A2B] hover:bg-[#F9F7F2]"
+        className="px-2 py-2 text-[#111111] hover:bg-[#FFFFFF]"
         onClick={inc}
         aria-label="Increase by one"
       >
@@ -1017,6 +1106,7 @@ function forecastY(
 export function GraphicsStudio() {
   const tabs = [
     { id: "bar" as const, label: "Bar chart", icon: BarChart3 },
+    { id: "hbar" as const, label: "Horizontal bar", icon: ChartBar },
     { id: "curve" as const, label: "Forecast curve", icon: TrendingUp },
     { id: "dot" as const, label: "Dot plot", icon: CircleDot },
     { id: "matrix" as const, label: "Lifecycle matrix", icon: Grid3x3 },
@@ -1025,32 +1115,54 @@ export function GraphicsStudio() {
 
   const [tab, setTab] = useState<TabId>("bar");
   const [studioSection, setStudioSection] = useState<StudioSectionTab>("graphics");
-  const [copied, setCopied] = useState<null | "bar" | "dot" | "flow" | "matrix" | "curve">(
-    null
-  );
+  const [copied, setCopied] = useState<
+    null | "bar" | "hbar" | "dot" | "flow" | "matrix" | "curve"
+  >(null);
+  const [canCopyImages, setCanCopyImages] = useState(false);
 
-  const flashCopied = useCallback((key: "bar" | "dot" | "flow" | "matrix" | "curve") => {
+  useEffect(() => {
+    setCanCopyImages(
+      typeof ClipboardItem !== "undefined" && Boolean(navigator.clipboard)
+    );
+  }, []);
+
+  const flashCopied = useCallback(
+    (key: "bar" | "hbar" | "dot" | "flow" | "matrix" | "curve") => {
     setCopied(key);
     window.setTimeout(() => setCopied(null), 2200);
   }, []);
 
   const [barRows, setBarRows] = useState<BarRow[]>([
-    { id: nid("br"), label: "Q1", c: 42, d: 33 },
-    { id: nid("br"), label: "Q2", c: 52, d: 46 },
-    { id: nid("br"), label: "Q3", c: 48, d: 41 },
-    { id: nid("br"), label: "Q4", c: 61, d: 53 },
+    { id: nid("br"), label: "Q1", values: [42, 33, 28] },
+    { id: nid("br"), label: "Q2", values: [52, 46, 39] },
+    { id: nid("br"), label: "Q3", values: [48, 41, 35] },
+    { id: nid("br"), label: "Q4", values: [61, 53, 47] },
   ]);
-  const [barLegendC, setBarLegendC] = useState("Condition C");
-  const [barLegendD, setBarLegendD] = useState("Condition D");
+  const [barLegends, setBarLegends] = useState(["Series A", "Series B", "Series C"]);
 
   const [barTitle, setBarTitle] = useState("Grouped comparison");
   const [barXL, setBarXL] = useState("Quarter");
   const [barYL, setBarYL] = useState("Count");
   const [barFoot, setBarFoot] = useState(
-    "Subtotals summarize the two series shown in brand colors."
+    "Subtotals summarize each grouped series shown in brand colors."
   );
 
   const barChartRef = useRef<Chart<"bar"> | null>(null);
+
+  const [hbarRows, setHbarRows] = useState<HBarRow[]>([
+    { id: nid("hr"), label: "Customer service", value: 26.5 },
+    { id: nid("hr"), label: "Research & data analysis", value: 24.4 },
+    { id: nid("hr"), label: "Internal productivity", value: 17.7 },
+    { id: nid("hr"), label: "Code generation", value: 9.8 },
+    { id: nid("hr"), label: "Content generation", value: 9.0 },
+    { id: nid("hr"), label: "Sales/marketing automation", value: 6.0 },
+    { id: nid("hr"), label: "Other", value: 6.7 },
+  ]);
+  const [hbarTitle, setHbarTitle] = useState("What is your primary agent use case?");
+  const [hbarFoot, setHbarFoot] = useState("LangChain State of Agent Engineering — 2025");
+  const [hbarValueSuffix, setHbarValueSuffix] = useState("%");
+  const [hbarValueDecimals, setHbarValueDecimals] = useState(1);
+  const hbarChartRef = useRef<Chart<"bar"> | null>(null);
 
   const [curveRows, setCurveRows] = useState<CurveRow[]>([
     { id: nid("cr"), x: 0, y: 42 },
@@ -1139,6 +1251,8 @@ export function GraphicsStudio() {
 
   const [pasteBar, setPasteBar] = useState("");
   const [pasteBarErr, setPasteBarErr] = useState<string | null>(null);
+  const [pasteHbar, setPasteHbar] = useState("");
+  const [pasteHbarErr, setPasteHbarErr] = useState<string | null>(null);
   const [pasteDot, setPasteDot] = useState("");
   const [pasteDotErr, setPasteDotErr] = useState<string | null>(null);
   const [pasteCurve, setPasteCurve] = useState("");
@@ -1149,6 +1263,7 @@ export function GraphicsStudio() {
   const [pasteFlowErr, setPasteFlowErr] = useState<string | null>(null);
 
   const [barDataMode, setBarDataMode] = useState<DataEntryMode>("manual");
+  const [hbarDataMode, setHbarDataMode] = useState<DataEntryMode>("manual");
   const [dotDataMode, setDotDataMode] = useState<DataEntryMode>("manual");
   const [curveDataMode, setCurveDataMode] = useState<DataEntryMode>("manual");
   const [matrixDataMode, setMatrixDataMode] = useState<DataEntryMode>("manual");
@@ -1162,11 +1277,26 @@ export function GraphicsStudio() {
       return;
     }
     setBarRows(r.rows);
-    if (r.legendC) setBarLegendC(r.legendC);
-    if (r.legendD) setBarLegendD(r.legendD);
+    setBarLegends(
+      r.legends ??
+        r.rows[0]?.values.map((_, i) => barLegends[i] ?? `Series ${i + 1}`) ??
+        barLegends
+    );
     setPasteBar("");
     setBarDataMode("manual");
-  }, [pasteBar]);
+  }, [barLegends, pasteBar]);
+
+  const applyHbarPaste = useCallback(() => {
+    setPasteHbarErr(null);
+    const r = parseHBarPaste(pasteHbar);
+    if (!r.ok) {
+      setPasteHbarErr(r.error);
+      return;
+    }
+    setHbarRows(r.rows);
+    setPasteHbar("");
+    setHbarDataMode("manual");
+  }, [pasteHbar]);
 
   const applyDotPaste = useCallback(() => {
     setPasteDotErr(null);
@@ -1241,10 +1371,24 @@ export function GraphicsStudio() {
           return;
         }
         setBarRows(r.rows);
-        if (r.legendC) setBarLegendC(r.legendC);
-        if (r.legendD) setBarLegendD(r.legendD);
+        setBarLegends(
+          r.legends ??
+            r.rows[0]?.values.map((_, i) => barLegends[i] ?? `Series ${i + 1}`) ??
+            barLegends
+        );
         setPasteBar(tsv);
         setBarDataMode("paste");
+        setStudioSection("graphics");
+      } else if (tab === "hbar") {
+        setPasteHbarErr(null);
+        const r = parseHBarPaste(tsv);
+        if (!r.ok) {
+          setPasteHbarErr(r.error);
+          return;
+        }
+        setHbarRows(r.rows);
+        setPasteHbar(tsv);
+        setHbarDataMode("paste");
         setStudioSection("graphics");
       } else if (tab === "dot") {
         setPasteDotErr(null);
@@ -1302,14 +1446,13 @@ export function GraphicsStudio() {
         setStudioSection("graphics");
       }
     },
-    [tab]
+    [barLegends, tab]
   );
 
   const barParsed = useMemo(
     () => ({
       labels: barRows.map((r) => r.label),
-      cData: barRows.map((r) => r.c),
-      dData: barRows.map((r) => r.d),
+      seriesCount: Math.max(2, ...barRows.map((r) => r.values.length)),
     }),
     [barRows]
   );
@@ -1317,28 +1460,17 @@ export function GraphicsStudio() {
   const barData = useMemo(
     () => ({
       labels: barParsed.labels,
-      datasets: [
-        {
-          label: barLegendC,
-          data: barParsed.cData,
-          backgroundColor: TOK.barPrimary,
-          borderColor: "transparent",
-          borderWidth: 0,
-          borderRadius: 0,
-          borderSkipped: false,
-        },
-        {
-          label: barLegendD,
-          data: barParsed.dData,
-          backgroundColor: TOK.barSecondary,
-          borderColor: "transparent",
-          borderWidth: 0,
-          borderRadius: 0,
-          borderSkipped: false,
-        },
-      ],
+      datasets: Array.from({ length: barParsed.seriesCount }, (_, index) => ({
+        label: barLegends[index] ?? `Series ${index + 1}`,
+        data: barRows.map((r) => r.values[index] ?? 0),
+        backgroundColor: barSeriesColor(index),
+        borderColor: "transparent",
+        borderWidth: 0,
+        borderRadius: 0,
+        borderSkipped: false,
+      })),
     }),
-    [barParsed, barLegendC, barLegendD]
+    [barLegends, barParsed, barRows]
   );
 
   const barOptions = useMemo(
@@ -1410,6 +1542,120 @@ export function GraphicsStudio() {
       },
     }),
     [barTitle, barXL, barYL]
+  );
+
+  const hbarParsed = useMemo(
+    () => ({
+      labels: hbarRows.map((r) => r.label),
+      values: hbarRows.map((r) => r.value),
+    }),
+    [hbarRows]
+  );
+
+  const hbarMax = useMemo(() => {
+    const vals = hbarParsed.values.filter(Number.isFinite);
+    if (!vals.length) return 100;
+    const peak = Math.max(...vals);
+    return Math.max(peak * 1.12, peak + 2, 10);
+  }, [hbarParsed.values]);
+
+  const hbarData = useMemo(
+    () => ({
+      labels: hbarParsed.labels,
+      datasets: [
+        {
+          label: "Value",
+          data: hbarParsed.values,
+          borderWidth: 0,
+          borderRadius: 0,
+          borderSkipped: false,
+          barThickness: HBAR_TOK.barThickness,
+          backgroundColor(context: ScriptableContext<"bar">) {
+            const { chart, dataIndex } = context;
+            const { chartArea } = chart;
+            if (!chartArea) return HBAR_TOK.gradEnd;
+            const meta = chart.getDatasetMeta(0);
+            const bar = meta.data[dataIndex] as InstanceType<typeof BarElement> | undefined;
+            const barX = bar?.x ?? chartArea.right;
+            return hbarBarGradient(chart as Chart<"bar">, chartArea, barX);
+          },
+        },
+      ],
+    }),
+    [hbarParsed]
+  );
+
+  const hbarOptions = useMemo(
+    () => ({
+      indexAxis: "y" as const,
+      responsive: true,
+      maintainAspectRatio: false,
+      devicePixelRatio: typeof window !== "undefined" ? window.devicePixelRatio : 1,
+      layout: {
+        padding: { top: 4, right: 52, bottom: 8, left: 4 },
+      },
+      plugins: {
+        studioPlotBg: HBAR_TOK.plotBg,
+        legend: { display: false },
+        hbarValueLabels: {
+          suffix: hbarValueSuffix,
+          decimals: hbarValueDecimals,
+        },
+        title: {
+          display: Boolean(hbarTitle.trim()),
+          text: hbarTitle.trim(),
+          color: HBAR_TOK.title,
+          align: "start" as const,
+          position: "top" as const,
+          font: {
+            size: 16,
+            weight: 600,
+            family: FONT_SANS,
+          },
+          padding: { top: 0, bottom: 18 },
+        },
+        tooltip: {
+          backgroundColor: "#1A1A1A",
+          titleColor: HBAR_TOK.title,
+          bodyColor: HBAR_TOK.label,
+          borderColor: HBAR_TOK.axis,
+          borderWidth: 1,
+          callbacks: {
+            label(it: TooltipItem<"bar">) {
+              const v = it.parsed.x;
+              return formatHbarValue(
+                typeof v === "number" ? v : Number(v),
+                hbarValueSuffix,
+                hbarValueDecimals
+              );
+            },
+          },
+        },
+      },
+      scales: {
+        x: {
+          min: 0,
+          max: hbarMax,
+          ticks: { display: false },
+          grid: {
+            color: HBAR_TOK.grid,
+            drawTicks: false,
+            lineWidth: 1,
+          },
+          border: { display: false },
+        },
+        y: {
+          ticks: {
+            color: HBAR_TOK.label,
+            font: { size: 12, weight: 500, family: FONT_SANS },
+            padding: 10,
+          },
+          grid: { display: false, drawOnChartArea: false },
+          border: { color: HBAR_TOK.axis, width: 1 },
+        },
+      },
+    }),
+    [hbarTitle, hbarMax, hbarValueSuffix, hbarValueDecimals]
   );
 
   const curvePrepared = useMemo(() => {
@@ -1611,7 +1857,7 @@ export function GraphicsStudio() {
         const source = flowText.trim() || flowDiagramToText(flowDirection, [], []);
 
         /** Mermaid accepts hex in themeVariables only (no rgba). */
-        const edgeHex = "#B89A84";
+        const edgeHex = "#BC7C3C";
 
         mermaid.initialize({
           startOnLoad: false,
@@ -1861,7 +2107,7 @@ export function GraphicsStudio() {
             x={w / 2}
             y={h - 10}
             textAnchor="middle"
-            fill="rgba(139, 90, 43, 0.72)"
+            fill="#BC7C3C"
             fontSize={13}
             fontStyle="italic"
             fontFamily={FONT_SANS}
@@ -1940,7 +2186,7 @@ export function GraphicsStudio() {
             x={w / 2}
             y={matrixTop - 4}
             textAnchor="middle"
-            fill="rgba(139, 90, 43, 0.72)"
+            fill="#BC7C3C"
             fontSize={11}
             fontWeight={500}
             fontFamily={FONT_SANS}
@@ -1977,7 +2223,7 @@ export function GraphicsStudio() {
             x={10}
             y={matrixBgY + innerH / 2}
             textAnchor="start"
-            fill="rgba(139, 90, 43, 0.72)"
+            fill="#BC7C3C"
             fontSize={11}
             fontWeight={500}
             fontFamily={FONT_SANS}
@@ -2054,7 +2300,7 @@ export function GraphicsStudio() {
             x={w / 2}
             y={h - 10}
             textAnchor="middle"
-            fill="rgba(139, 90, 43, 0.72)"
+            fill="#BC7C3C"
             fontSize={12}
             fontStyle="italic"
             fontFamily={FONT_SANS}
@@ -2096,7 +2342,7 @@ export function GraphicsStudio() {
 
   const copyBarPng = useCallback(async () => {
     const chart = barChartRef.current;
-    if (!chart || typeof ClipboardItem === "undefined") return;
+    if (!chart || !canCopyImages) return;
     try {
       /** Promise-based payload keeps Chromium’s clipboard write inside user gesture. */
       await navigator.clipboard.write([
@@ -2130,7 +2376,55 @@ export function GraphicsStudio() {
         alert("Could not copy or save — use Download PNG.");
       }
     }
-  }, [flashCopied]);
+  }, [canCopyImages, flashCopied]);
+
+  const downloadHbarPng = useCallback(() => {
+    const chart = hbarChartRef.current;
+    if (!chart) return;
+    chart.draw();
+    const url = chart.toBase64Image("image/png", 1);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "horizontal-bar-chart.png";
+    a.click();
+  }, []);
+
+  const copyHbarPng = useCallback(async () => {
+    const chart = hbarChartRef.current;
+    if (!chart || !canCopyImages) return;
+    try {
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          "image/png": (async () => {
+            chart.draw();
+            const url = chart.toBase64Image("image/png", 1);
+            const res = await fetch(url);
+            return res.blob();
+          })(),
+        }),
+      ]);
+      flashCopied("hbar");
+    } catch (err) {
+      console.error(err);
+      try {
+        chart.draw();
+        const url = chart.toBase64Image("image/png", 1);
+        const res = await fetch(url);
+        const blob = await res.blob();
+        const dl = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = dl;
+        a.download = "horizontal-bar-chart.png";
+        a.click();
+        URL.revokeObjectURL(dl);
+        alert(
+          "Clipboard blocked copying images — downloaded horizontal-bar-chart.png instead."
+        );
+      } catch {
+        alert("Could not copy or save — use Download PNG.");
+      }
+    }
+  }, [canCopyImages, flashCopied]);
 
   const downloadCurvePng = useCallback(() => {
     const chart = curveChartRef.current;
@@ -2145,7 +2439,7 @@ export function GraphicsStudio() {
 
   const copyCurvePng = useCallback(async () => {
     const chart = curveChartRef.current;
-    if (!chart || typeof ClipboardItem === "undefined") return;
+    if (!chart || !canCopyImages) return;
     try {
       await navigator.clipboard.write([
         new ClipboardItem({
@@ -2176,7 +2470,7 @@ export function GraphicsStudio() {
         alert("Could not copy or save — use Download PNG.");
       }
     }
-  }, [flashCopied]);
+  }, [canCopyImages, flashCopied]);
 
   const downloadFlowSvg = useCallback(() => {
     const wrap = flowWrapRef.current?.querySelector("svg");
@@ -2230,7 +2524,7 @@ export function GraphicsStudio() {
     const el = document.getElementById("dashboard-dot-svg");
     if (!el || !(el instanceof SVGSVGElement)) return;
     ensureSvgOpaqueWhiteRoot(el);
-    if (typeof ClipboardItem === "undefined") return;
+    if (!canCopyImages) return;
     try {
       await navigator.clipboard.write([
         new ClipboardItem({
@@ -2252,7 +2546,7 @@ export function GraphicsStudio() {
         alert("Could not copy or save PNG.");
       }
     }
-  }, [flashCopied]);
+  }, [canCopyImages, flashCopied]);
 
   const matrixSvgExport = useCallback(() => {
     const el = document.getElementById("dashboard-matrix-svg");
@@ -2306,7 +2600,7 @@ export function GraphicsStudio() {
     const el = document.getElementById("dashboard-matrix-svg");
     if (!el || !(el instanceof SVGSVGElement)) return;
     ensureSvgOpaqueWhiteRoot(el);
-    if (typeof ClipboardItem === "undefined") return;
+    if (!canCopyImages) return;
     try {
       await navigator.clipboard.write([
         new ClipboardItem({
@@ -2328,7 +2622,7 @@ export function GraphicsStudio() {
         alert("Could not copy or save PNG.");
       }
     }
-  }, [flashCopied]);
+  }, [canCopyImages, flashCopied]);
 
   const copyFlowSvgText = useCallback(async () => {
     const wrap = flowWrapRef.current?.querySelector("svg");
@@ -2377,7 +2671,7 @@ export function GraphicsStudio() {
       alert("Nothing to copy yet — wait for the diagram to finish rendering.");
       return;
     }
-    if (typeof ClipboardItem === "undefined") {
+    if (!canCopyImages) {
       alert("Copying images needs a secure page (HTTPS) and Clipboard support.");
       return;
     }
@@ -2419,12 +2713,54 @@ export function GraphicsStudio() {
         alert("Could not copy or save — use Download PNG.");
       }
     }
-  }, [flashCopied, flowTitle, flowFoot, flowXL, flowYL]);
+  }, [canCopyImages, flashCopied, flowTitle, flowFoot, flowXL, flowYL]);
 
   const addBarRow = () =>
     setBarRows((prev) => [
       ...prev,
-      { id: nid("br"), label: `Item ${prev.length + 1}`, c: 0, d: 0 },
+      {
+        id: nid("br"),
+        label: `Item ${prev.length + 1}`,
+        values: Array.from({ length: barParsed.seriesCount }, () => 0),
+      },
+    ]);
+
+  const addBarSeries = () => {
+    const nextIndex = barParsed.seriesCount;
+    setBarLegends((prev) => [...prev, `Series ${nextIndex + 1}`]);
+    setBarRows((prev) => prev.map((row) => ({ ...row, values: [...row.values, 0] })));
+  };
+
+  const removeBarSeries = (index: number) => {
+    if (barParsed.seriesCount <= 2) return;
+    setBarLegends((prev) => prev.filter((_, i) => i !== index));
+    setBarRows((prev) =>
+      prev.map((row) => ({
+        ...row,
+        values: row.values.filter((_, i) => i !== index),
+      }))
+    );
+  };
+
+  const updateBarValue = (rowId: string, index: number, value: number) => {
+    setBarRows((prev) =>
+      prev.map((row) =>
+        row.id === rowId
+          ? {
+              ...row,
+              values: Array.from({ length: barParsed.seriesCount }, (_, i) =>
+                i === index ? value : row.values[i] ?? 0
+              ),
+            }
+          : row
+      )
+    );
+  };
+
+  const addHbarRow = () =>
+    setHbarRows((prev) => [
+      ...prev,
+      { id: nid("hr"), label: `Category ${prev.length + 1}`, value: 0 },
     ]);
 
   const addCurveRow = () =>
@@ -2492,8 +2828,8 @@ export function GraphicsStudio() {
                     "inline-flex items-center gap-2 border px-4 py-2 font-sans text-[13px] font-medium transition-colors",
                     RAD.outer,
                     tab === id
-                      ? "border-[#8B5A2B] bg-[#8B5A2B] text-white"
-                      : "border-[#E8E4DC] bg-white text-zinc-800 hover:border-[#8B5A2B]/40"
+                      ? "border-[#111111] bg-[#111111] text-white"
+                      : "border-[#D8D8D8] bg-white text-[#111111] hover:border-[#111111]/40"
                   )}
                 >
                   <Icon className="size-3.5 shrink-0" strokeWidth={1.75} />
@@ -2520,8 +2856,8 @@ export function GraphicsStudio() {
                 "inline-flex items-center gap-2 border px-4 py-2 font-sans text-[13px] font-medium transition-colors",
                 RAD.outer,
                 studioSection === "graphics"
-                  ? "border-[#8B5A2B] bg-[#8B5A2B] text-white"
-                  : "border-[#E8E4DC] bg-white text-zinc-800 hover:border-[#8B5A2B]/40"
+                  ? "border-[#111111] bg-[#111111] text-white"
+                  : "border-[#D8D8D8] bg-white text-[#111111] hover:border-[#111111]/40"
               )}
             >
               <Layers className="size-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
@@ -2538,8 +2874,8 @@ export function GraphicsStudio() {
                 "inline-flex items-center gap-2 border px-4 py-2 font-sans text-[13px] font-medium transition-colors",
                 RAD.outer,
                 studioSection === "assist"
-                  ? "border-[#8B5A2B] bg-[#8B5A2B] text-white"
-                  : "border-[#E8E4DC] bg-white text-zinc-800 hover:border-[#8B5A2B]/40"
+                  ? "border-[#111111] bg-[#111111] text-white"
+                  : "border-[#D8D8D8] bg-white text-[#111111] hover:border-[#111111]/40"
               )}
             >
               <MessageSquare className="size-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
@@ -2596,20 +2932,43 @@ export function GraphicsStudio() {
                 hidden={barDataMode !== "manual"}
               >
               <label className="mt-6 block border-t pt-4" style={{ borderColor: BORDER_TIGHT }}>
-                <span className={labelSpanStyle}>Legend wording</span>
-                <div className="mt-2 grid gap-3 sm:grid-cols-2">
-                  <input
-                    className="w-full border bg-white px-3 py-2 text-sm outline-none"
-                    style={{ borderColor: BORDER_TIGHT }}
-                    value={barLegendC}
-                    onChange={(e) => setBarLegendC(e.target.value)}
-                  />
-                  <input
-                    className="w-full border bg-white px-3 py-2 text-sm outline-none"
-                    style={{ borderColor: BORDER_TIGHT }}
-                    value={barLegendD}
-                    onChange={(e) => setBarLegendD(e.target.value)}
-                  />
+                <span className={labelSpanStyle}>Series wording</span>
+                <div className="mt-2 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {Array.from({ length: barParsed.seriesCount }, (_, index) => (
+                    <div key={index} className="flex gap-2">
+                      <input
+                        aria-label={`Series ${index + 1} name`}
+                        className="w-full border bg-white px-3 py-2 text-sm outline-none"
+                        style={{ borderColor: BORDER_TIGHT }}
+                        value={barLegends[index] ?? `Series ${index + 1}`}
+                        onChange={(e) =>
+                          setBarLegends((prev) =>
+                            Array.from({ length: barParsed.seriesCount }, (_, i) =>
+                              i === index ? e.target.value : prev[i] ?? `Series ${i + 1}`
+                            )
+                          )
+                        }
+                      />
+                      <button
+                        type="button"
+                        className="border px-2 py-2 text-[#111111] disabled:opacity-35"
+                        style={{ borderColor: BORDER_TIGHT }}
+                        onClick={() => removeBarSeries(index)}
+                        disabled={barParsed.seriesCount <= 2}
+                        aria-label={`Remove series ${index + 1}`}
+                      >
+                        <Trash2 className="size-4" aria-hidden />
+                      </button>
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={addBarSeries}
+                    className="inline-flex items-center justify-center gap-2 border bg-white px-3 py-2 text-xs font-medium"
+                    style={{ borderColor: BORDER_TIGHT, color: TOK.textPrimary }}
+                  >
+                    <PlusCircle className="size-4" /> Add series
+                  </button>
                 </div>
               </label>
 
@@ -2628,12 +2987,12 @@ export function GraphicsStudio() {
                 {barRows.map((row, idx) => (
                   <div
                     key={row.id}
-                    className="grid grid-cols-1 items-center gap-3 border p-3 sm:grid-cols-[1fr_auto_auto_auto]"
+                    className="grid grid-cols-1 items-center gap-3 border p-3 lg:grid-cols-[minmax(11rem,1fr)_minmax(0,2fr)_auto]"
                     style={{ borderColor: BORDER_TIGHT }}
                   >
                     <input
                       aria-label={`Category ${idx + 1} name`}
-                      className="w-full border bg-[#fcf8f3] px-3 py-2 text-sm outline-none"
+                      className="w-full border bg-[#F5F5F5] px-3 py-2 text-sm outline-none"
                       style={{ borderColor: BORDER_TIGHT }}
                       value={row.label}
                       onChange={(e) =>
@@ -2644,35 +3003,22 @@ export function GraphicsStudio() {
                         )
                       }
                     />
-                    <div className="flex items-center gap-2">
-                      <span className="text-[11px]" style={{ color: COL.label }}>
-                        {barLegendC}
-                      </span>
-                      <StepControl
-                        value={row.c}
-                        onChange={(c) =>
-                          setBarRows((rs) =>
-                            rs.map((r) => (r.id === row.id ? { ...r, c } : r))
-                          )
-                        }
-                      />
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[11px]" style={{ color: COL.label }}>
-                        {barLegendD}
-                      </span>
-                      <StepControl
-                        value={row.d}
-                        onChange={(d) =>
-                          setBarRows((rs) =>
-                            rs.map((r) => (r.id === row.id ? { ...r, d } : r))
-                          )
-                        }
-                      />
+                    <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                      {Array.from({ length: barParsed.seriesCount }, (_, seriesIndex) => (
+                        <div key={seriesIndex} className="flex items-center gap-2">
+                          <span className="min-w-16 text-[11px]" style={{ color: COL.label }}>
+                            {barLegends[seriesIndex] ?? `Series ${seriesIndex + 1}`}
+                          </span>
+                          <StepControl
+                            value={row.values[seriesIndex] ?? 0}
+                            onChange={(value) => updateBarValue(row.id, seriesIndex, value)}
+                          />
+                        </div>
+                      ))}
                     </div>
                     <button
                       type="button"
-                      className="inline-flex justify-center gap-2 border px-3 py-2 text-xs uppercase tracking-[0.08em] text-zinc-600"
+                      className="inline-flex justify-center gap-2 border px-3 py-2 text-xs uppercase tracking-[0.08em] text-[#111111]"
                       style={{ borderColor: BORDER_TIGHT }}
                       onClick={() => setBarRows((rs) => rs.filter((r) => r.id !== row.id))}
                       disabled={barRows.length <= 1}
@@ -2699,8 +3045,9 @@ export function GraphicsStudio() {
                   hint={
                     <>
                       Paste from a spreadsheet: <strong>tab</strong> or <strong>comma</strong>{" "}
-                      between cells. Optional first row: if columns 2–3 are not numbers, they update
-                      the two series names; otherwise every row is data (label, value A, value B).
+                      between cells. Optional first row: if any series column is not numeric, columns
+                      2+ update the series names; otherwise every row is data (label, then two or
+                      more values).
                     </>
                   }
                   example={PASTE_PLACEHOLDER_BAR}
@@ -2728,10 +3075,15 @@ export function GraphicsStudio() {
                 )}
               </div>
 
-              <CustomBarLegend cLegend={barLegendC} dLegend={barLegendD} />
+              <CustomBarLegend
+                legends={Array.from(
+                  { length: barParsed.seriesCount },
+                  (_, i) => barLegends[i] ?? `Series ${i + 1}`
+                )}
+              />
 
               {barFoot.trim() && (
-                <p className="mt-6 text-center font-serif-display italic text-[14px] text-zinc-600">
+                <p className="mt-6 text-center font-serif-display italic text-[14px] text-[#111111]">
                   {barFoot}
                 </p>
               )}
@@ -2753,18 +3105,229 @@ export function GraphicsStudio() {
                 <button
                   type="button"
                   onClick={() => void copyBarPng()}
-                  className="inline-flex items-center gap-2 border bg-white px-3 py-2 font-sans text-xs font-medium text-zinc-800"
+                  className="inline-flex items-center gap-2 border bg-white px-3 py-2 font-sans text-xs font-medium text-[#111111]"
                   style={{ borderColor: BORDER_TIGHT }}
                   disabled={
                     barParsed.labels.length === 0 ||
-                    typeof ClipboardItem === "undefined"
+                    !canCopyImages
                   }
                   title="Copy raster graphic (solid white background)"
                 >
                   <Copy className="size-4" aria-hidden /> Copy PNG
                 </button>
                 {copied === "bar" ? (
-                  <span className="text-xs font-medium text-emerald-800">Copied</span>
+                  <span className="text-xs font-medium text-[#BC7C3C]">Copied</span>
+                ) : null}
+              </div>
+            </div>
+          </section>
+        )}
+
+        {tab === "hbar" && (
+          <section
+            className={cn("border bg-white p-6", RAD.outer)}
+            style={{ borderColor: BORDER_TIGHT }}
+          >
+            <div style={{ borderTop: `3px solid ${HBAR_TOK.gradEnd}`, marginTop: -1, paddingTop: 2 }}>
+              <SectionHeader eyebrow="Horizontal bar" title="Single-series share chart" />
+
+              <div className="mt-4 grid gap-4 border-t pt-4 sm:grid-cols-2" style={{ borderColor: BORDER_TIGHT }}>
+                <label className="block font-sans sm:col-span-2">
+                  <span className={labelSpanStyle}>Chart title</span>
+                  <input
+                    className="mt-1 w-full border bg-white px-3 py-2 text-sm outline-none"
+                    style={{ borderColor: BORDER_TIGHT, color: TOK.textPrimary }}
+                    value={hbarTitle}
+                    onChange={(e) => setHbarTitle(e.target.value)}
+                  />
+                </label>
+                <label className="block font-sans sm:col-span-2">
+                  <span className={labelSpanStyle}>Footer / source line</span>
+                  <input
+                    className="mt-1 w-full border bg-white px-3 py-2 text-sm outline-none"
+                    style={{ borderColor: BORDER_TIGHT, color: TOK.textPrimary }}
+                    value={hbarFoot}
+                    onChange={(e) => setHbarFoot(e.target.value)}
+                    placeholder="Report name or attribution"
+                  />
+                </label>
+                <label className="block font-sans">
+                  <span className={labelSpanStyle}>Value suffix</span>
+                  <input
+                    className="mt-1 w-full border bg-white px-3 py-2 text-sm outline-none"
+                    style={{ borderColor: BORDER_TIGHT, color: TOK.textPrimary }}
+                    value={hbarValueSuffix}
+                    onChange={(e) => setHbarValueSuffix(e.target.value)}
+                    placeholder="%"
+                  />
+                </label>
+                <label className="block font-sans">
+                  <span className={labelSpanStyle}>Decimal places</span>
+                  <input
+                    type="number"
+                    min={0}
+                    max={4}
+                    className="mt-1 w-full border bg-white px-3 py-2 text-sm outline-none"
+                    style={{ borderColor: BORDER_TIGHT, color: TOK.textPrimary }}
+                    value={hbarValueDecimals}
+                    onChange={(e) =>
+                      setHbarValueDecimals(
+                        Math.min(4, Math.max(0, Number(e.target.value) || 0))
+                      )
+                    }
+                  />
+                </label>
+              </div>
+
+              <DataEntryModeTabs
+                idPrefix="studio-hbar-data"
+                value={hbarDataMode}
+                onChange={setHbarDataMode}
+              />
+
+              <div
+                id="studio-hbar-data-panel-manual"
+                role="tabpanel"
+                aria-labelledby="studio-hbar-data-tab-manual"
+                hidden={hbarDataMode !== "manual"}
+              >
+                <div className="mt-6 space-y-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className={labelSpanStyle}>Categories & values</span>
+                    <button
+                      type="button"
+                      onClick={addHbarRow}
+                      className="inline-flex items-center gap-2 border bg-white px-3 py-2 text-xs font-medium"
+                      style={{ borderColor: BORDER_TIGHT, color: TOK.textPrimary }}
+                    >
+                      <PlusCircle className="size-4" /> Add category
+                    </button>
+                  </div>
+                  {hbarRows.map((row, idx) => (
+                    <div
+                      key={row.id}
+                      className="grid grid-cols-1 items-center gap-3 border p-3 sm:grid-cols-[1fr_auto_auto]"
+                      style={{ borderColor: BORDER_TIGHT }}
+                    >
+                      <input
+                        aria-label={`Category ${idx + 1} name`}
+                        className="w-full border bg-[#F5F5F5] px-3 py-2 text-sm outline-none"
+                        style={{ borderColor: BORDER_TIGHT }}
+                        value={row.label}
+                        onChange={(e) =>
+                          setHbarRows((rs) =>
+                            rs.map((r) =>
+                              r.id === row.id ? { ...r, label: e.target.value } : r
+                            )
+                          )
+                        }
+                      />
+                      <StepControl
+                        value={row.value}
+                        step={0.1}
+                        onChange={(value) =>
+                          setHbarRows((rs) =>
+                            rs.map((r) => (r.id === row.id ? { ...r, value } : r))
+                          )
+                        }
+                      />
+                      <button
+                        type="button"
+                        className="inline-flex justify-center gap-2 border px-3 py-2 text-xs uppercase tracking-[0.08em] text-[#111111]"
+                        style={{ borderColor: BORDER_TIGHT }}
+                        onClick={() => setHbarRows((rs) => rs.filter((r) => r.id !== row.id))}
+                        disabled={hbarRows.length <= 1}
+                      >
+                        <Trash2 className="size-4" /> Remove
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div
+                id="studio-hbar-data-panel-paste"
+                role="tabpanel"
+                aria-labelledby="studio-hbar-data-tab-paste"
+                hidden={hbarDataMode !== "paste"}
+                className="border-t pt-4"
+                style={{ borderColor: BORDER_TIGHT }}
+              >
+                <PasteDataBlock
+                  embedded
+                  chartKind="hbar"
+                  id="studio-paste-hbar"
+                  hint={
+                    <>
+                      Paste from a spreadsheet: <strong>tab</strong> or <strong>comma</strong>{" "}
+                      between cells. Each row is label and one numeric value (percentages may
+                      include a <strong>%</strong> suffix).
+                    </>
+                  }
+                  example={PASTE_PLACEHOLDER_HBAR}
+                  value={pasteHbar}
+                  onChange={setPasteHbar}
+                  onApply={applyHbarPaste}
+                  onClear={() => {
+                    setPasteHbar("");
+                    setPasteHbarErr(null);
+                  }}
+                  error={pasteHbarErr}
+                />
+              </div>
+
+              <div
+                className="relative mt-6 flex min-h-[320px] w-full flex-col border px-2 py-3"
+                style={{ borderColor: TOK.cardBorder, background: HBAR_TOK.plotBg }}
+              >
+                <div className="min-h-[280px] flex-1">
+                  {hbarParsed.labels.length > 0 ? (
+                    <Bar ref={hbarChartRef} data={hbarData} options={hbarOptions} />
+                  ) : (
+                    <p className="text-sm" style={{ color: HBAR_TOK.label }}>
+                      Add at least one category.
+                    </p>
+                  )}
+                </div>
+                {hbarFoot.trim() ? (
+                  <p
+                    className="pointer-events-none mt-2 text-right font-sans text-[11px]"
+                    style={{ color: HBAR_TOK.label }}
+                  >
+                    {hbarFoot.trim()}
+                  </p>
+                ) : null}
+              </div>
+
+              <div className="mt-8 flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={downloadHbarPng}
+                  className="inline-flex items-center gap-2 border px-3 py-2 font-sans text-xs font-medium"
+                  style={{
+                    borderColor: TOK.cardBorder,
+                    background: TOK.pageBg,
+                    color: TOK.textPrimary,
+                  }}
+                  disabled={hbarParsed.labels.length === 0}
+                >
+                  <Download className="size-4" aria-hidden /> Download PNG
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void copyHbarPng()}
+                  className="inline-flex items-center gap-2 border bg-white px-3 py-2 font-sans text-xs font-medium text-[#111111]"
+                  style={{ borderColor: BORDER_TIGHT }}
+                  disabled={
+                    hbarParsed.labels.length === 0 ||
+                    !canCopyImages
+                  }
+                  title="Copy raster graphic (dark plot background)"
+                >
+                  <Copy className="size-4" aria-hidden /> Copy PNG
+                </button>
+                {copied === "hbar" ? (
+                  <span className="text-xs font-medium text-[#BC7C3C]">Copied</span>
                 ) : null}
               </div>
             </div>
@@ -2881,7 +3444,7 @@ export function GraphicsStudio() {
                     )}
                   </div>
                   {curveFoot.trim() && (
-                    <p className="mt-4 text-center font-serif-display italic text-[14px] text-zinc-600">
+                    <p className="mt-4 text-center font-serif-display italic text-[14px] text-[#111111]">
                       {curveFoot}
                     </p>
                   )}
@@ -2899,15 +3462,15 @@ export function GraphicsStudio() {
                   <button
                     type="button"
                     onClick={() => void copyCurvePng()}
-                    className="inline-flex items-center gap-2 border bg-white px-3 py-2 font-sans text-xs font-medium text-zinc-800"
+                    className="inline-flex items-center gap-2 border bg-white px-3 py-2 font-sans text-xs font-medium text-[#111111]"
                     style={{ borderColor: BORDER_TIGHT }}
-                    disabled={!curveRows.length || typeof ClipboardItem === "undefined"}
+                    disabled={!curveRows.length || !canCopyImages}
                     title="Copy raster graphic (solid white background)"
                   >
                     <Copy className="size-4" aria-hidden /> Copy PNG
                   </button>
                   {copied === "curve" ? (
-                    <span className="text-xs font-medium text-emerald-800">Copied</span>
+                    <span className="text-xs font-medium text-[#BC7C3C]">Copied</span>
                   ) : null}
                 </div>
               </div>
@@ -2938,13 +3501,13 @@ export function GraphicsStudio() {
                         style={{ borderColor: BORDER_TIGHT }}
                       >
                         <label className="block">
-                          <span className="text-[10px] font-medium uppercase tracking-[0.08em]" style={{ color: "rgba(139, 90, 43, 0.72)" }}>
+                          <span className="text-[10px] font-medium uppercase tracking-[0.08em]" style={{ color: "#BC7C3C" }}>
                             x {idx + 1}
                           </span>
                           <input
                             type="number"
                             step="0.1"
-                            className="mt-1 w-full border bg-[#fcf8f3] px-3 py-2 text-sm outline-none"
+                            className="mt-1 w-full border bg-[#F5F5F5] px-3 py-2 text-sm outline-none"
                             style={{ borderColor: BORDER_TIGHT, color: TOK.textPrimary }}
                             value={row.x}
                             onChange={(e) =>
@@ -2957,13 +3520,13 @@ export function GraphicsStudio() {
                           />
                         </label>
                         <label className="block">
-                          <span className="text-[10px] font-medium uppercase tracking-[0.08em]" style={{ color: "rgba(139, 90, 43, 0.72)" }}>
+                          <span className="text-[10px] font-medium uppercase tracking-[0.08em]" style={{ color: "#BC7C3C" }}>
                             y {idx + 1}
                           </span>
                           <input
                             type="number"
                             step="0.1"
-                            className="mt-1 w-full border bg-[#fcf8f3] px-3 py-2 text-sm outline-none"
+                            className="mt-1 w-full border bg-[#F5F5F5] px-3 py-2 text-sm outline-none"
                             style={{ borderColor: BORDER_TIGHT, color: TOK.textPrimary }}
                             value={row.y}
                             onChange={(e) =>
@@ -2977,7 +3540,7 @@ export function GraphicsStudio() {
                         </label>
                         <button
                           type="button"
-                          className="border px-2 py-2 text-zinc-500"
+                          className="border px-2 py-2 text-[#111111]"
                           style={{ borderColor: BORDER_TIGHT }}
                           onClick={() => setCurveRows((rs) => rs.filter((r) => r.id !== row.id))}
                           disabled={curveRows.length <= 1}
@@ -3131,7 +3694,7 @@ export function GraphicsStudio() {
                     <button
                       type="button"
                       onClick={() => void copyDotSvgText()}
-                      className="inline-flex items-center gap-2 border bg-white px-3 py-2 font-sans text-xs font-medium text-zinc-800"
+                      className="inline-flex items-center gap-2 border bg-white px-3 py-2 font-sans text-xs font-medium text-[#111111]"
                       style={{ borderColor: BORDER_TIGHT }}
                       disabled={!parsedDots.length}
                       title="Copy SVG markup (opaque white background)"
@@ -3154,17 +3717,17 @@ export function GraphicsStudio() {
                     <button
                       type="button"
                       onClick={() => void copyDotPng()}
-                      className="inline-flex items-center gap-2 border bg-white px-3 py-2 font-sans text-xs font-medium text-zinc-800"
+                      className="inline-flex items-center gap-2 border bg-white px-3 py-2 font-sans text-xs font-medium text-[#111111]"
                       style={{ borderColor: BORDER_TIGHT }}
                       disabled={
-                        !parsedDots.length || typeof ClipboardItem === "undefined"
+                        !parsedDots.length || !canCopyImages
                       }
                       title="Copy raster image (PNG, solid white background)"
                     >
                       <Copy className="size-4" aria-hidden /> Copy PNG
                     </button>
                     {copied === "dot" ? (
-                      <span className="text-xs font-medium text-emerald-800">Copied</span>
+                      <span className="text-xs font-medium text-[#BC7C3C]">Copied</span>
                     ) : null}
                   </div>
                 </div>
@@ -3206,7 +3769,7 @@ export function GraphicsStudio() {
                     style={{ borderColor: BORDER_TIGHT }}
                   >
                     <input
-                      className="w-full border bg-[#fcf8f3] px-3 py-2 text-sm outline-none"
+                      className="w-full border bg-[#F5F5F5] px-3 py-2 text-sm outline-none"
                       style={{ borderColor: BORDER_TIGHT }}
                       value={row.label}
                       onChange={(e) =>
@@ -3244,7 +3807,7 @@ export function GraphicsStudio() {
                     </div>
                     <button
                       type="button"
-                      className="inline-flex gap-2 text-xs uppercase tracking-[0.08em] text-zinc-600"
+                      className="inline-flex gap-2 text-xs uppercase tracking-[0.08em] text-[#111111]"
                       onClick={() => setDotRows((rs) => rs.filter((r) => r.id !== row.id))}
                       disabled={dotRows.length <= 1}
                     >
@@ -3380,12 +3943,12 @@ export function GraphicsStudio() {
                     onClick={() => void copyMatrixPng()}
                     className="inline-flex items-center gap-2 border bg-white px-3 py-2 font-sans text-xs font-medium"
                     style={{ borderColor: TOK.cardBorder, color: TOK.textPrimary }}
-                    disabled={typeof ClipboardItem === "undefined"}
+                    disabled={!canCopyImages}
                   >
                     <Copy className="size-4" /> Copy PNG
                   </button>
                   {copied === "matrix" ? (
-                    <span className="text-xs font-medium text-emerald-800">Copied</span>
+                    <span className="text-xs font-medium text-[#BC7C3C]">Copied</span>
                   ) : null}
                 </div>
               </div>
@@ -3523,7 +4086,7 @@ export function GraphicsStudio() {
                       >
                         {matrixCols.map((col, ci) => (
                           <label key={col.id} className="flex flex-col gap-1">
-                            <span className="text-[10px] font-medium uppercase tracking-[0.08em]" style={{ color: "rgba(139, 90, 43, 0.72)" }}>
+                            <span className="text-[10px] font-medium uppercase tracking-[0.08em]" style={{ color: "#BC7C3C" }}>
                               {col.label || `C${ci + 1}`}
                             </span>
                             <select
@@ -3557,7 +4120,7 @@ export function GraphicsStudio() {
                       </div>
                       <button
                         type="button"
-                        className="inline-flex gap-2 text-xs uppercase tracking-[0.08em] text-zinc-600"
+                        className="inline-flex gap-2 text-xs uppercase tracking-[0.08em] text-[#111111]"
                         onClick={() =>
                           setMatrixRows((rs) => rs.filter((r) => r.id !== row.id))
                         }
@@ -3661,7 +4224,7 @@ export function GraphicsStudio() {
                             "mx-auto max-w-2xl font-sans text-[11px] font-medium uppercase leading-relaxed tracking-[0.12em]",
                             flowTitle.trim() ? "mt-3" : ""
                           )}
-                          style={{ color: "rgba(139, 90, 43, 0.72)" }}
+                          style={{ color: "#BC7C3C" }}
                         >
                           {[flowYL.trim(), flowXL.trim()].filter(Boolean).join(" · ")}
                         </p>
@@ -3712,7 +4275,7 @@ export function GraphicsStudio() {
                   >
                     <p
                       className="mx-auto max-w-xl font-sans text-[13px] italic leading-relaxed md:text-[14px]"
-                      style={{ color: "rgba(139, 90, 43, 0.72)" }}
+                      style={{ color: "#BC7C3C" }}
                     >
                       {flowFoot}
                     </p>
@@ -3721,7 +4284,7 @@ export function GraphicsStudio() {
 
                 {flowError ? (
                   <p
-                    className="border-t px-4 py-4 font-mono text-xs text-red-600 md:px-5"
+                    className="border-t px-4 py-4 font-mono text-xs text-[#BC7C3C] md:px-5"
                     style={{ borderColor: TOK.cardBorder, background: TOK.cardBg }}
                   >
                     {flowError}
@@ -3771,7 +4334,7 @@ export function GraphicsStudio() {
                     <Copy className="size-4" aria-hidden /> Copy SVG
                   </button>
                   {copied === "flow" ? (
-                    <span className="text-xs font-medium text-emerald-800">Copied</span>
+                    <span className="text-xs font-medium text-[#BC7C3C]">Copied</span>
                   ) : null}
                 </div>
               </div>
@@ -3788,8 +4351,8 @@ export function GraphicsStudio() {
                         className={cn(
                           "flex-1 border px-4 py-2 text-xs font-medium uppercase tracking-[0.08em]",
                           flowDirection === d
-                            ? "border-[#8B5A2B] bg-[#8B5A2B] text-white"
-                            : "border-[#E8E4DC] bg-white",
+                            ? "border-[#111111] bg-[#111111] text-white"
+                            : "border-[#D8D8D8] bg-white",
                           RAD.outer
                         )}
                         style={
@@ -3882,7 +4445,7 @@ export function GraphicsStudio() {
                       style={{ borderColor: BORDER_TIGHT }}
                     >
                       <input
-                        className="min-w-[120px] flex-1 border bg-[#fcf8f3] px-3 py-2 text-sm outline-none"
+                        className="min-w-[120px] flex-1 border bg-[#F5F5F5] px-3 py-2 text-sm outline-none"
                         style={{ borderColor: BORDER_TIGHT }}
                         value={node.label}
                         onChange={(e) =>
@@ -3913,7 +4476,7 @@ export function GraphicsStudio() {
                       </select>
                       <button
                         type="button"
-                        className="border px-2 py-2 text-zinc-500"
+                        className="border px-2 py-2 text-[#111111]"
                         style={{ borderColor: BORDER_TIGHT }}
                         onClick={() => {
                           setFlowNodes((ns) => ns.filter((n) => n.id !== node.id));
@@ -3991,13 +4554,13 @@ export function GraphicsStudio() {
                           className="flex flex-wrap items-center justify-between gap-2 border px-3 py-2"
                           style={{ borderColor: BORDER_TIGHT }}
                         >
-                          <span className="text-zinc-700">
+                          <span className="text-[#111111]">
                             {fromN?.label ?? e.fromId} → {toN?.label ?? e.toId}
                             {e.label.trim() ? ` (“${e.label}”)` : ""}
                           </span>
                           <button
                             type="button"
-                            className="text-xs text-red-600"
+                            className="text-xs text-[#BC7C3C]"
                             onClick={() =>
                               setFlowEdges((es) => es.filter((x) => x.id !== e.id))
                             }

@@ -33,7 +33,7 @@ export function AnnouncementBar() {
                   </span>
                   <Link
                     href="/writing"
-                    className="shrink-0 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-white underline decoration-white/40 underline-offset-[3px] transition-colors hover:decoration-[var(--color-accent-cyan)] md:text-[11px] md:font-medium"
+                    className="shrink-0 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-white underline decoration-white/40 underline-offset-[3px] transition-colors hover:decoration-[#BC7C3C] md:text-[11px] md:font-medium"
                   >
                     Read thesis →
                   </Link>
@@ -41,19 +41,19 @@ export function AnnouncementBar() {
                 <button
                   type="button"
                   onClick={dismiss}
-                  className="shrink-0 py-1 font-mono text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-400 transition-colors hover:text-white md:hidden"
+                  className="shrink-0 py-1 font-mono text-[10px] font-medium uppercase tracking-[0.18em] text-[#BC7C3C] transition-colors hover:text-white md:hidden"
                   aria-label="Dismiss announcement"
                 >
                   Dismiss
                 </button>
               </div>
-              <p className="hidden max-w-none text-center font-mono text-[10px] font-medium uppercase leading-snug tracking-[0.1em] text-zinc-400 text-balance md:block md:w-full md:min-w-0 md:text-center md:text-[11px] md:leading-normal md:tracking-[0.14em]">
+              <p className="hidden max-w-none text-center font-mono text-[10px] font-medium uppercase leading-snug tracking-[0.1em] text-[#BC7C3C] text-balance md:block md:w-full md:min-w-0 md:text-center md:text-[11px] md:leading-normal md:tracking-[0.14em]">
                 Why crypto, fintech, deep tech, and anything in between rewards obsessive due diligence.
               </p>
               <button
                 type="button"
                 onClick={dismiss}
-                className="hidden shrink-0 justify-self-end py-1 font-mono text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-400 transition-colors hover:text-white md:block"
+                className="hidden shrink-0 justify-self-end py-1 font-mono text-[10px] font-medium uppercase tracking-[0.18em] text-[#BC7C3C] transition-colors hover:text-white md:block"
                 aria-label="Dismiss announcement"
               >
                 Dismiss

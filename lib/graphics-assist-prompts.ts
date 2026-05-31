@@ -4,12 +4,23 @@ import type { ChartPasteKind } from "@/lib/graphics-paste-parsers";
 
 export const GRAPHICS_ASSIST_RULES: Record<ChartPasteKind, string> = {
   bar: `BAR CHART paste format (TAB-separated preferred; comma OK if cells have no commas):
-- Each DATA row: Label<TAB>number<TAB>number (two numeric series).
-- Optional HEADER row first: if columns 2–3 are NOT numbers, they become legend labels for the two series; following rows are data.
+- Each DATA row: Label<TAB>number<TAB>number... (two or more numeric series).
+- Optional HEADER row first: if any series column is NOT numeric, columns 2+ become legend labels for every series; following rows are data.
+- Every data row must have the same number of series columns.
 - Numbers may include commas (e.g. 1,234); they become integers after rounding.
 Example:
-Quarter\tSeries A\tSeries B
-Q1\t42\t33`,
+Quarter\tSeries A\tSeries B\tSeries C
+Q1\t42\t33\t28`,
+
+  hbar: `HORIZONTAL BAR CHART paste format (TAB-separated preferred; comma OK if cells have no commas):
+- Each DATA row: Label<TAB>value (one numeric value per category).
+- Optional HEADER row first: if column 2 is NOT a number, skip it (e.g. Category<TAB>Share).
+- Values may include a trailing % (e.g. 26.5 or 26.5%); decimals OK.
+- Typical use: percentage shares that sum to ~100 (order rows longest bar first when possible).
+Example:
+Use case\tShare
+Customer service\t26.5
+Research & data analysis\t24.4`,
 
   dot: `DOT PLOT paste format (TAB-separated preferred):
 - Each DATA row: Label<TAB>baseline<TAB>Dprime<TAB>Cprime (four numeric columns; decimals OK; rounded when stored).

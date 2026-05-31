@@ -17,13 +17,13 @@ const base =
 
 const variants: Record<NonNullable<ButtonProps["variant"]>, string> = {
   primary:
-    "bg-[var(--gradient-button)] text-zinc-900 active:opacity-95",
+    "bg-[#111111] text-white active:opacity-95",
   secondary:
-    "border border-zinc-300 bg-white text-zinc-900 hover:bg-zinc-50 hover:border-zinc-400",
+    "border border-zinc-300 bg-white text-[#111111] hover:border-[#BC7C3C]",
   ghost:
-    "text-zinc-600 hover:text-zinc-900 border border-transparent hover:border-zinc-200 hover:bg-zinc-50",
+    "text-[#111111] hover:text-[#BC7C3C] border border-transparent hover:border-zinc-200",
   discover:
-    "text-[var(--color-accent-purple)] hover:text-[color-mix(in_srgb,zinc-900_35%,var(--color-accent-purple))] gap-2 !px-2 !py-2 border-0 bg-transparent",
+    "text-[#BC7C3C] hover:text-[#111111] gap-2 !px-2 !py-2 border-0 bg-transparent",
 };
 
 export function Button({

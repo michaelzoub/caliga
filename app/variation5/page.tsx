@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Image from "next/image";
+import Link from "next/link";
 
 import { AuroraBackground } from "@/components/backgrounds/AuroraBackground";
 import { AtAGlanceFloatingPaths } from "@/components/backgrounds/FloatingPaths";
@@ -27,14 +28,14 @@ import { Container } from "@/components/ui";
 import { SOCIAL_X_URL } from "@/lib/site";
 
 // ── Palette ───────────────────────────────────────────────────────────────────
-const HERO_BG = "#f5f4f0";
+const HERO_BG = "#ffffff";
 const WHITE = "#ffffff";
 const INK = "#111111";
 const DARK_SECTION = "#0e0e0e";
-const RULE = "#e0dcd8";
-const MUTED = "#8a8680";
-const DIM = "#b8b4b0";
-const AMBER = "#c47a30";
+const RULE = "#d8d8d8";
+const MUTED = "#111111";
+const DIM = "#111111";
+const AMBER = "#BC7C3C";
 
 function Faded({ children }: { children: React.ReactNode }) {
   return <span style={{ color: DIM }}>{children}</span>;
@@ -54,7 +55,7 @@ const researchAreas = [
       <PixelBlast
         variant="square"
         pixelSize={2}
-        color="#cffafe"
+        color="#111111"
         patternScale={2}
         patternDensity={1}
         pixelSizeJitter={0}
@@ -77,7 +78,7 @@ const researchAreas = [
       <PixelBlast
         variant="square"
         pixelSize={2}
-        color="#fde68a"
+        color="#BC7C3C"
         patternScale={2}
         patternDensity={1}
         pixelSizeJitter={0}
@@ -99,7 +100,7 @@ const researchAreas = [
     bg: (
       <FlickeringGrid
         className="absolute inset-0 h-full w-full"
-        color="rgb(196, 122, 48)"
+        color="#BC7C3C"
         squareSize={3}
         gridGap={7}
         flickerChance={0.05}
@@ -196,27 +197,27 @@ export default function Variation5Page() {
                       <div className="grid gap-8 lg:grid-cols-2 lg:gap-16">
                         <p
                           className="font-serif-display text-base leading-relaxed md:text-lg"
-                          style={{ color: "#4a4540" }}
+                          style={{ color: INK }}
                         >
                           Caliga is a research collective covering crypto,
                           fintech, deep tech, and frontier AI.
                         </p>
                         <div className="flex flex-col justify-center gap-4">
                           <div className="flex flex-wrap gap-3">
-                            <a
+                            <Link
                               href="/#contact"
                               className="inline-flex items-center px-5 py-2.5 font-mono text-[11px] uppercase tracking-[0.18em] font-medium transition-opacity hover:opacity-80"
                               style={{ background: INK, color: WHITE }}
                             >
                               Collaborate
-                            </a>
-                            <a
+                            </Link>
+                            <Link
                               href="/writing"
                               className="inline-flex items-center border px-5 py-2.5 font-mono text-[11px] uppercase tracking-[0.18em] font-medium transition-colors hover:border-[#111]"
                               style={{ borderColor: RULE, color: INK }}
                             >
                               Our research
-                            </a>
+                            </Link>
                           </div>
                         </div>
                       </div>
@@ -238,12 +239,12 @@ export default function Variation5Page() {
             <AuroraBackground
               animationSpeed={90}
               opacity={0.13}
-              colors={["#2a2a2a", "#383838", "#454545", "#303030", "#252525"]}
+              colors={["#111111", "#1f1f1f", "#2a2a2a", "#181818", "#0f0f0f"]}
             />
             <Container>
               <p
                 className="mb-8 font-mono text-[10px] font-medium uppercase tracking-[0.22em]"
-                style={{ color: "#555" }}
+                style={{ color: AMBER }}
               >
                 Why we exist
               </p>
@@ -257,7 +258,7 @@ export default function Variation5Page() {
               >
                 Most of the value in frontier markets
                 <br />
-                <span style={{ color: "#3a3a3a" }}>is captured</span> before the
+                <span style={{ color: AMBER }}>is captured</span> before the
                 thesis
                 <br />
                 <span style={{ color: AMBER }}>becomes consensus.</span>
@@ -266,7 +267,7 @@ export default function Variation5Page() {
               <div className="mt-12 grid gap-8 lg:grid-cols-2">
                 <p
                   className="font-serif-display text-lg leading-relaxed"
-                  style={{ color: "#8a8880" }}
+                  style={{ color: WHITE }}
                 >
                   Frontier technology moves faster than most research processes.
                   The teams that reach good decisions do so because they
@@ -274,7 +275,7 @@ export default function Variation5Page() {
                 </p>
                 <p
                   className="font-serif-display text-base leading-relaxed"
-                  style={{ color: "#6a6662" }}
+                  style={{ color: WHITE }}
                 >
                   We work with founders who expect reviewers to read the
                   implementation, question the assumptions, and document the
@@ -291,7 +292,7 @@ export default function Variation5Page() {
             <section
               id="research"
               className="scroll-mt-24 border-b border-t py-16 md:py-24"
-              style={{ background: "#f8f7f4", borderColor: RULE }}
+              style={{ background: WHITE, borderColor: RULE }}
             >
               <Container>
                 <div className="grid gap-12 lg:grid-cols-12 lg:gap-8">
@@ -310,7 +311,7 @@ export default function Variation5Page() {
                     </h2>
                     <p
                       className="mt-5 font-serif-display text-base leading-relaxed"
-                      style={{ color: "#5a5550" }}
+                      style={{ color: INK }}
                     >
                       Within each: primary research, documented methodology, and
                       explicit assumptions. We decline work that doesn&apos;t
@@ -347,7 +348,7 @@ export default function Variation5Page() {
                               </h3>
                               <p
                                 className="mt-2 font-serif-display text-sm leading-relaxed"
-                                style={{ color: "#6a6560" }}
+                                style={{ color: INK }}
                               >
                                 {area.body}
                               </p>
@@ -401,7 +402,7 @@ export default function Variation5Page() {
                 </h2>
                 <p
                   className="mx-auto mt-6 max-w-2xl font-serif-display text-base leading-relaxed text-center md:text-lg"
-                  style={{ color: "#5a5550" }}
+                  style={{ color: INK }}
                 >
                   Our published work includes memos, models, and datasets that
                   can be independently verified. When we allocate capital it is
@@ -472,7 +473,7 @@ export default function Variation5Page() {
                     >
                       <FlickeringGrid
                         className="absolute inset-0 h-full w-full"
-                        color="rgb(196, 122, 48)"
+                        color="#BC7C3C"
                         squareSize={3}
                         gridGap={7}
                         flickerChance={0.06}
@@ -506,7 +507,7 @@ export default function Variation5Page() {
           <section
             id="team"
             className="scroll-mt-24 border-b py-16 md:py-24"
-            style={{ background: "#f8f7f4", borderColor: RULE }}
+            style={{ background: WHITE, borderColor: RULE }}
           >
             <Container>
               <p
@@ -533,7 +534,7 @@ export default function Variation5Page() {
                   const { Bg } = member;
                   return (
                     <StaggerItem key={member.handle} className="h-full">
-                      <article className="relative flex h-full flex-col overflow-hidden border border-zinc-200/90 bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+                      <article className="relative flex h-full flex-col overflow-hidden border border-[#d8d8d8] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
                         <div
                           className="pointer-events-none absolute inset-0 opacity-70"
                           aria-hidden
@@ -542,7 +543,7 @@ export default function Variation5Page() {
                         </div>
 
                         <div className="relative flex justify-center px-7 pt-7 md:justify-start">
-                          <div className="relative aspect-[4/5] w-[min(100%,10rem)] shrink-0 overflow-hidden bg-zinc-100 ring-1 ring-zinc-200/90 sm:w-[10.5rem] md:w-[9.25rem] lg:w-[10rem]">
+                          <div className="relative aspect-[4/5] w-[min(100%,10rem)] shrink-0 overflow-hidden bg-[#f2f2f2] ring-1 ring-[#d8d8d8] sm:w-[10.5rem] md:w-[9.25rem] lg:w-[10rem]">
                             <Image
                               src={member.image}
                               alt={`${member.handle}, ${member.role}`}
@@ -554,28 +555,28 @@ export default function Variation5Page() {
                         </div>
 
                         <div className="relative flex flex-1 flex-col px-7 pb-7 pt-6">
-                          <div className="h-px w-10 bg-zinc-900/85" />
-                          <p className="mt-4 font-mono text-[10px] font-medium uppercase tracking-[0.2em] text-zinc-900">
+                          <div className="h-px w-10 bg-[#111111]" />
+                          <p className="mt-4 font-mono text-[10px] font-medium uppercase tracking-[0.2em] text-[#111111]">
                             {member.handle}
-                            <span className="mx-1.5 font-normal text-zinc-400">
+                            <span className="mx-1.5 font-normal text-[#BC7C3C]">
                               ·
                             </span>
-                            <span className="text-zinc-500">{member.city}</span>
+                            <span className="text-[#BC7C3C]">{member.city}</span>
                           </p>
-                          <p className="mt-1 font-mono text-[9px] uppercase tracking-[0.18em] text-zinc-400">
+                          <p className="mt-1 font-mono text-[9px] uppercase tracking-[0.18em] text-[#BC7C3C]">
                             Founder
                           </p>
-                          <h3 className="mt-3 font-sans text-lg font-semibold tracking-tight text-zinc-900">
+                          <h3 className="mt-3 font-sans text-lg font-semibold tracking-tight text-[#111111]">
                             {member.role}
                           </h3>
-                          <p className="mt-3 flex-1 font-serif-display text-sm leading-relaxed text-zinc-600">
+                          <p className="mt-3 flex-1 font-serif-display text-sm leading-relaxed text-[#111111]">
                             {member.blurb}
                           </p>
                           <a
                             href={member.xUrl}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="mt-6 inline-flex w-fit font-mono text-[10px] uppercase tracking-[0.16em] text-zinc-700 underline decoration-zinc-300 underline-offset-4 transition-colors hover:text-zinc-900"
+                            className="mt-6 inline-flex w-fit font-mono text-[10px] uppercase tracking-[0.16em] text-[#BC7C3C] underline decoration-[#BC7C3C] underline-offset-4 transition-opacity hover:opacity-80"
                           >
                             Profile on X ↗
                           </a>
@@ -601,7 +602,7 @@ export default function Variation5Page() {
                 <div>
                   <p
                     className="mb-4 font-mono text-[10px] font-medium uppercase tracking-[0.22em]"
-                    style={{ color: "#555" }}
+                    style={{ color: AMBER }}
                   >
                     Contact
                   </p>
@@ -613,7 +614,7 @@ export default function Variation5Page() {
                   </h2>
                   <p
                     className="mt-5 font-serif-display text-base leading-relaxed md:text-lg"
-                    style={{ color: "#8a8880" }}
+                    style={{ color: WHITE }}
                   >
                     Share the problem, what you have built, and what you want
                     reviewed. We respond when the research can add real value.
@@ -642,11 +643,11 @@ export default function Variation5Page() {
                   className="relative overflow-hidden border p-8 md:p-10"
                   style={{ borderColor: "#1e1e1e" }}
                 >
-                  <AtAGlanceFloatingPaths strokeColor="#c9a87c" />
+                  <AtAGlanceFloatingPaths strokeColor="#BC7C3C" />
                   <div className="relative">
                     <p
                       className="font-mono text-[11px] font-medium uppercase tracking-[0.16em]"
-                      style={{ color: "#555" }}
+                      style={{ color: AMBER }}
                     >
                       How we work
                     </p>
@@ -659,7 +660,7 @@ export default function Variation5Page() {
                     </p>
                     <p
                       className="mt-4 font-serif-display text-base leading-relaxed"
-                      style={{ color: "#8a8880" }}
+                      style={{ color: WHITE }}
                     >
                       Our output is research you can trace, not a presentation.
                     </p>
