@@ -106,6 +106,7 @@ export default function ArticleEditor({
   const [slug, setSlug] = useState(initialSlug);
   const [slugManuallyEdited, setSlugManuallyEdited] = useState(!!initialSlug);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
+  const [saveError, setSaveError] = useState("");
   const [isPublishing, setIsPublishing] = useState(false);
   const [linkUrl, setLinkUrl] = useState("");
   const [showLinkInput, setShowLinkInput] = useState(false);
@@ -250,6 +251,7 @@ export default function ArticleEditor({
       if (!opts.publish && !isDirty.current) return;
 
       setSaveStatus("saving");
+      setSaveError("");
       try {
         if (opts.publish) {
           setIsPublishing(true);
@@ -300,7 +302,11 @@ export default function ArticleEditor({
           if (savedTimeoutRef.current) clearTimeout(savedTimeoutRef.current);
           savedTimeoutRef.current = setTimeout(() => setSaveStatus("idle"), 2500);
         }
-      } catch {
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Unknown save error.";
+        console.error("Article save failed", error);
+        setSaveError(message);
         setSaveStatus("error");
         setIsPublishing(false);
       }
@@ -420,7 +426,7 @@ export default function ArticleEditor({
           : saveStatus === "saved"
             ? "Saved"
             : saveStatus === "error"
-              ? "Save failed"
+              ? saveError || "Save failed"
               : "";
 
   const statusClassName = cn(
