@@ -2,6 +2,10 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { createServiceClient } from "@/lib/supabase";
 import ArticleEditor from "@/components/editor/ArticleEditor";
+import {
+  DashboardErrorPanel,
+  dashboardErrorMessage,
+} from "@/components/dashboard/DashboardErrorPanel";
 
 export const metadata: Metadata = { title: "Edit Article — Dashboard" };
 
@@ -9,13 +13,25 @@ type Props = { params: Promise<{ id: string }> };
 
 export default async function EditArticlePage({ params }: Props) {
   const { id } = await params;
-  const supabase = createServiceClient();
+  let article: Record<string, unknown> | null = null;
 
-  const { data: article } = await supabase
-    .from("articles")
-    .select("*")
-    .eq("id", id)
-    .maybeSingle();
+  try {
+    const supabase = createServiceClient();
+    const result = await supabase
+      .from("articles")
+      .select("*")
+      .eq("id", id)
+      .maybeSingle();
+    if (result.error) throw result.error;
+    article = result.data as Record<string, unknown> | null;
+  } catch (error) {
+    return (
+      <DashboardErrorPanel
+        title="Article failed to load"
+        detail={dashboardErrorMessage(error)}
+      />
+    );
+  }
 
   if (!article) notFound();
 

@@ -3,6 +3,10 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { createServiceClient } from "@/lib/supabase";
 import PublishSuccessActions from "@/components/editor/PublishSuccessActions";
+import {
+  DashboardErrorPanel,
+  dashboardErrorMessage,
+} from "@/components/dashboard/DashboardErrorPanel";
 
 export const metadata: Metadata = { title: "Published — Dashboard" };
 
@@ -10,21 +14,32 @@ type Props = { params: Promise<{ id: string }> };
 
 export default async function PublishSuccessPage({ params }: Props) {
   const { id } = await params;
-  const supabase = createServiceClient();
+  let article: Record<string, unknown> | null = null;
 
-  const primary = await supabase
-    .from("articles")
-    .select("id, title, subtitle, content, slug, published_at, preview_token")
-    .eq("id", id)
-    .maybeSingle();
-  let article = primary.data as Record<string, unknown> | null;
-  if (primary.error) {
-    const fallback = await supabase
+  try {
+    const supabase = createServiceClient();
+    const primary = await supabase
       .from("articles")
-      .select("id, title, subtitle, content, slug, published_at")
+      .select("id, title, subtitle, content, slug, published_at, preview_token")
       .eq("id", id)
       .maybeSingle();
-    article = fallback.data as Record<string, unknown> | null;
+    article = primary.data as Record<string, unknown> | null;
+    if (primary.error) {
+      const fallback = await supabase
+        .from("articles")
+        .select("id, title, subtitle, content, slug, published_at")
+        .eq("id", id)
+        .maybeSingle();
+      if (fallback.error) throw fallback.error;
+      article = fallback.data as Record<string, unknown> | null;
+    }
+  } catch (error) {
+    return (
+      <DashboardErrorPanel
+        title="Published article failed to load"
+        detail={dashboardErrorMessage(error)}
+      />
+    );
   }
 
   if (!article || !article.published_at) notFound();

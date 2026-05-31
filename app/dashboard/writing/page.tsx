@@ -2,6 +2,10 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { createServiceClient } from "@/lib/supabase";
 import { DeleteButton } from "./DeleteButton";
+import {
+  DashboardErrorPanel,
+  dashboardErrorMessage,
+} from "@/components/dashboard/DashboardErrorPanel";
 
 export const metadata: Metadata = { title: "Writing Dashboard" };
 export const dynamic = "force-dynamic";
@@ -15,19 +19,25 @@ function formatDate(iso: string) {
 }
 
 export default async function DashboardWritingPage() {
-  const supabase = createServiceClient();
-  const primary = await supabase
-    .from("articles")
-    .select("id, title, subtitle, slug, published_at, created_at, preview_token, password_hash")
-    .order("created_at", { ascending: false });
-  let articles: Record<string, unknown>[] | null =
-    (primary.data as Record<string, unknown>[] | null) ?? null;
-  if (primary.error) {
-    const fallback = await supabase
+  let articles: Record<string, unknown>[] | null = null;
+
+  try {
+    const supabase = createServiceClient();
+    const primary = await supabase
       .from("articles")
-      .select("id, title, subtitle, slug, published_at, created_at")
+      .select("id, title, subtitle, slug, published_at, created_at, preview_token, password_hash")
       .order("created_at", { ascending: false });
-    articles = (fallback.data as Record<string, unknown>[] | null) ?? null;
+    articles = (primary.data as Record<string, unknown>[] | null) ?? null;
+    if (primary.error) {
+      const fallback = await supabase
+        .from("articles")
+        .select("id, title, subtitle, slug, published_at, created_at")
+        .order("created_at", { ascending: false });
+      if (fallback.error) throw fallback.error;
+      articles = (fallback.data as Record<string, unknown>[] | null) ?? null;
+    }
+  } catch (error) {
+    return <DashboardErrorPanel detail={dashboardErrorMessage(error)} />;
   }
 
   return (
