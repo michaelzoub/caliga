@@ -22,6 +22,8 @@ import {
   ImageIcon,
   Sigma,
   Superscript,
+  ExternalLink,
+  Search,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import NextLink from "next/link";
@@ -33,6 +35,31 @@ import { LatexBlock, LatexInline } from "@/components/editor/extensions/latexNod
 type SaveStatus = "idle" | "saving" | "saved" | "error";
 
 type OutlineItem = { level: number; text: string; pos: number };
+type ProofSource = {
+  id: string;
+  source: string;
+  title: string;
+  authors: string[];
+  year: number | null;
+  venue: string;
+  url: string;
+  doi?: string;
+  citedBy?: number;
+};
+type ProofResult = {
+  queries: string[];
+  summary: {
+    answer?: string;
+    caveats?: string[];
+    sources?: {
+      id: string;
+      relevance: string;
+      useful_data?: string;
+    }[];
+    suggested_insert?: string;
+  };
+  sources: ProofSource[];
+};
 
 /** Sticky offset below dashboard shell (3.5rem) + doc / mobile action row (~2.75rem). */
 const EDITOR_TOOLBAR_STICKY_TOP =
@@ -114,6 +141,10 @@ export default function ArticleEditor({
   const [uploadCount, setUploadCount] = useState(0);
   const [coverUploading, setCoverUploading] = useState(false);
   const [wordCount, setWordCount] = useState(0);
+  const [selectedText, setSelectedText] = useState("");
+  const [proofResult, setProofResult] = useState<ProofResult | null>(null);
+  const [proofError, setProofError] = useState("");
+  const [proofLoading, setProofLoading] = useState(false);
 
   const contentRef = useRef(initialContent);
   const isDirty = useRef(false);
@@ -220,6 +251,12 @@ export default function ArticleEditor({
         next.push({ level, text, pos });
       });
       setOutline(next);
+      const { from, to, empty } = editor.state.selection;
+      setSelectedText(
+        empty
+          ? ""
+          : editor.state.doc.textBetween(from, to, " ").replace(/\s+/g, " ").trim()
+      );
     };
     sync();
     editor.on("update", sync);
@@ -237,6 +274,33 @@ export default function ArticleEditor({
     },
     [editor]
   );
+
+  const findProof = useCallback(async () => {
+    if (!editor || !selectedText.trim()) return;
+    setProofLoading(true);
+    setProofError("");
+    try {
+      const res = await fetch("/api/dashboard/find-proof", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          selection: selectedText,
+          context: editor.getText({ blockSeparator: "\n" }),
+        }),
+      });
+      const payload = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(
+          payload?.error || payload?.detail || "Proof lookup failed."
+        );
+      }
+      setProofResult(payload as ProofResult);
+    } catch (error) {
+      setProofError(error instanceof Error ? error.message : "Proof lookup failed.");
+    } finally {
+      setProofLoading(false);
+    }
+  }, [editor, selectedText]);
 
   // Auto-generate slug from title unless manually edited
   useEffect(() => {
@@ -559,6 +623,102 @@ export default function ArticleEditor({
             <p className="mt-2 font-sans text-sm tabular-nums text-zinc-800">
               {wordCount} {wordCount === 1 ? "word" : "words"}
             </p>
+          </div>
+          <div className="mt-8 border-t border-zinc-100 pt-6">
+            <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-zinc-400">
+              Proof finder
+            </p>
+            <p className="mt-2 line-clamp-4 font-sans text-[13px] leading-relaxed text-zinc-600">
+              {selectedText || "Highlight article text to search scholarly evidence."}
+            </p>
+            <button
+              type="button"
+              onClick={findProof}
+              disabled={!selectedText || proofLoading}
+              className="mt-3 inline-flex w-full items-center justify-center gap-2 border border-zinc-300 px-3 py-2 font-sans text-xs font-medium text-zinc-800 transition-[border-color,background-color,color] duration-150 ease-out hover:border-zinc-900 hover:text-zinc-900 disabled:opacity-40"
+            >
+              <Search size={14} />
+              {proofLoading ? "Finding proof…" : "Find proof (data/papers)"}
+            </button>
+            {proofError ? (
+              <p className="mt-3 font-sans text-[13px] leading-relaxed text-red-600">
+                {proofError}
+              </p>
+            ) : null}
+            {proofResult ? (
+              <div className="mt-5 space-y-5">
+                <div>
+                  <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-zinc-400">
+                    Finding
+                  </p>
+                  <p className="mt-2 font-sans text-[13px] leading-relaxed text-zinc-800">
+                    {proofResult.summary?.answer || "No summary returned."}
+                  </p>
+                </div>
+                {proofResult.summary?.suggested_insert ? (
+                  <div>
+                    <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-zinc-400">
+                      Suggested insert
+                    </p>
+                    <p className="mt-2 border-l border-zinc-300 pl-3 font-sans text-[13px] leading-relaxed text-zinc-700">
+                      {proofResult.summary.suggested_insert}
+                    </p>
+                  </div>
+                ) : null}
+                {proofResult.summary?.caveats?.length ? (
+                  <div>
+                    <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-zinc-400">
+                      Caveats
+                    </p>
+                    <ul className="mt-2 space-y-1 font-sans text-[13px] leading-relaxed text-zinc-600">
+                      {proofResult.summary.caveats.map((caveat, i) => (
+                        <li key={`${caveat}-${i}`}>{caveat}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+                <div>
+                  <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-zinc-400">
+                    Sources
+                  </p>
+                  <ul className="mt-2 space-y-3">
+                    {proofResult.sources.slice(0, 6).map((source) => {
+                      const sourceNote = proofResult.summary?.sources?.find(
+                        (item) => item.id === source.id
+                      );
+                      return (
+                        <li key={source.id} className="border-t border-zinc-100 pt-3">
+                          <a
+                            href={source.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="group flex items-start gap-2 font-sans text-[13px] font-medium leading-snug text-zinc-900 underline-offset-4 hover:underline"
+                          >
+                            <span className="min-w-0">{source.title}</span>
+                            <ExternalLink
+                              size={12}
+                              className="mt-0.5 shrink-0 text-zinc-400 group-hover:text-zinc-700"
+                            />
+                          </a>
+                          <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.12em] text-zinc-400">
+                            {source.source}
+                            {source.year ? ` · ${source.year}` : ""}
+                            {source.citedBy !== undefined
+                              ? ` · ${source.citedBy} citations`
+                              : ""}
+                          </p>
+                          {sourceNote ? (
+                            <p className="mt-1 font-sans text-[12px] leading-relaxed text-zinc-600">
+                              {sourceNote.useful_data || sourceNote.relevance}
+                            </p>
+                          ) : null}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              </div>
+            ) : null}
           </div>
         </aside>
 
