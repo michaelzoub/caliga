@@ -1,6 +1,7 @@
 "use client";
 
 import { useEditor, EditorContent } from "@tiptap/react";
+import type { Editor as TiptapEditor } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
 import Link from "@tiptap/extension-link";
 import Placeholder from "@tiptap/extension-placeholder";
@@ -90,6 +91,57 @@ function countWordsFromPlainText(text: string): number {
   return t.split(/\s+/).filter(Boolean).length;
 }
 
+function imageTitleFromSrc(src: string, index: number) {
+  try {
+    const pathname = new URL(src, window.location.origin).pathname;
+    const filename = decodeURIComponent(pathname.split("/").pop() || "");
+    return imageTitleFromFilename(filename || `Article image ${index + 1}`);
+  } catch {
+    return `Article image ${index + 1}`;
+  }
+}
+
+function normalizeEditorImageAttachmentTitles(editor: TiptapEditor) {
+  const updates: {
+    pos: number;
+    attrs: Record<string, unknown>;
+  }[] = [];
+
+  editor.state.doc.descendants((node, pos) => {
+    if (node.type.name !== "image") return;
+
+    const src = typeof node.attrs.src === "string" ? node.attrs.src : "";
+    const existingTitle =
+      typeof node.attrs.title === "string" ? node.attrs.title.trim() : "";
+    const existingAlt =
+      typeof node.attrs.alt === "string" ? node.attrs.alt.trim() : "";
+    const title =
+      existingTitle || existingAlt || imageTitleFromSrc(src, updates.length);
+
+    if (existingTitle && existingAlt) return;
+
+    updates.push({
+      pos,
+      attrs: {
+        ...node.attrs,
+        title,
+        alt: existingAlt || title,
+      },
+    });
+  });
+
+  if (!updates.length) return false;
+
+  const tr = editor.state.tr;
+  updates.forEach(({ pos, attrs }) => {
+    const node = editor.state.doc.nodeAt(pos);
+    if (!node) return;
+    tr.setNodeMarkup(pos, undefined, attrs, node.marks);
+  });
+  editor.view.dispatch(tr);
+  return true;
+}
+
 interface ArticleEditorProps {
   initialId?: string;
   initialTitle?: string;
@@ -154,6 +206,7 @@ export default function ArticleEditor({
 
   const contentRef = useRef(initialContent);
   const isDirty = useRef(false);
+  const isNormalizingImages = useRef(false);
   const savedTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Stable ref so editorProps callbacks never go stale
@@ -207,6 +260,32 @@ export default function ArticleEditor({
       },
     },
   });
+
+  useEffect(() => {
+    if (!editor) return;
+
+    const syncImageAttachmentTitles = () => {
+      if (isNormalizingImages.current) return;
+
+      queueMicrotask(() => {
+        if (editor.isDestroyed || isNormalizingImages.current) return;
+
+        isNormalizingImages.current = true;
+        const changed = normalizeEditorImageAttachmentTitles(editor);
+        if (changed) {
+          contentRef.current = editor.getHTML();
+          isDirty.current = true;
+        }
+        isNormalizingImages.current = false;
+      });
+    };
+
+    syncImageAttachmentTitles();
+    editor.on("update", syncImageAttachmentTitles);
+    return () => {
+      editor.off("update", syncImageAttachmentTitles);
+    };
+  }, [editor]);
 
   // Keep insertImageRef up-to-date whenever editor changes
   useEffect(() => {

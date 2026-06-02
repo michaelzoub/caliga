@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { AnnouncementBar } from "@/components/AnnouncementBar";
 import { MobileNav } from "@/components/MobileNav";
 import { Container } from "@/components/ui";
@@ -23,12 +24,14 @@ export function Header() {
             className="relative z-[2] flex h-full items-center outline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#BC7C3C]"
             aria-label="Caliga home"
           >
-            <span
-              className="font-serif-display italic tracking-tight leading-none select-none"
-              style={{ fontSize: "1.75rem", color: "#BC7C3C" }}
-            >
-              Caliga
-            </span>
+            <Image
+              src="/caliga-logo.png"
+              alt="Caliga"
+              width={900}
+              height={470}
+              priority
+              className="h-8 w-auto select-none md:h-9"
+            />
           </Link>
           <nav
             className="absolute left-1/2 top-1/2 hidden -translate-x-1/2 -translate-y-1/2 items-center gap-8 md:flex"
