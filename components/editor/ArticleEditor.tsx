@@ -31,6 +31,10 @@ import { useRouter } from "next/navigation";
 import { saveDraft, publishArticle } from "@/app/dashboard/writing/actions";
 import { cn } from "@/lib/utils";
 import { LatexBlock, LatexInline } from "@/components/editor/extensions/latexNodes";
+import {
+  imageTitleFromFilename,
+  withImageAttachmentTitles,
+} from "@/lib/image-attachment-titles";
 
 type SaveStatus = "idle" | "saving" | "saved" | "error";
 
@@ -70,10 +74,12 @@ function stripHtml(html: string) {
 }
 
 async function copyRichText(html: string) {
+  const titledHtml = withImageAttachmentTitles(html);
+
   await navigator.clipboard.write([
     new ClipboardItem({
-      "text/html": new Blob([html], { type: "text/html" }),
-      "text/plain": new Blob([stripHtml(html)], { type: "text/plain" }),
+      "text/html": new Blob([titledHtml], { type: "text/html" }),
+      "text/plain": new Blob([stripHtml(titledHtml)], { type: "text/plain" }),
     }),
   ]);
 }
@@ -220,12 +226,13 @@ export default function ArticleEditor({
           return;
         }
         const { url } = await res.json();
+        const attachmentTitle = imageTitleFromFilename(file.name);
         // After inserting the image (a leaf node), create a paragraph so
         // the cursor has somewhere to go and the user can keep typing.
         editor
           .chain()
           .focus()
-          .setImage({ src: url })
+          .setImage({ src: url, alt: attachmentTitle, title: attachmentTitle })
           .createParagraphNear()
           .focus()
           .run();
@@ -311,8 +318,10 @@ export default function ArticleEditor({
 
   const doSave = useCallback(
     async (opts: { publish?: boolean } = {}) => {
-      const currentContent = contentRef.current;
-      if (!opts.publish && !isDirty.current) return;
+      const previousContent = contentRef.current;
+      const currentContent = withImageAttachmentTitles(previousContent);
+      contentRef.current = currentContent;
+      if (!opts.publish && !isDirty.current && currentContent === previousContent) return;
 
       setSaveStatus("saving");
       setSaveError("");

@@ -2,16 +2,19 @@
 
 import { useState } from "react";
 import { Check, Copy } from "lucide-react";
+import { withImageAttachmentTitles } from "@/lib/image-attachment-titles";
 
 function stripHtml(html: string): string {
   return html.replace(/<[^>]*>/g, "");
 }
 
 async function copyRichText(html: string) {
+  const titledHtml = withImageAttachmentTitles(html);
+
   await navigator.clipboard.write([
     new ClipboardItem({
-      "text/html": new Blob([html], { type: "text/html" }),
-      "text/plain": new Blob([stripHtml(html)], { type: "text/plain" }),
+      "text/html": new Blob([titledHtml], { type: "text/html" }),
+      "text/plain": new Blob([stripHtml(titledHtml)], { type: "text/plain" }),
     }),
   ]);
 }
