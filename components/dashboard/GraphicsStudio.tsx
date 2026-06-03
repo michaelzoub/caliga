@@ -123,6 +123,7 @@ const chartPlotBgPlugin: Plugin<"bar" | "line"> = {
 const barValueLabelsPlugin: Plugin<"bar"> = {
   id: "barValueLabels",
   afterDatasetsDraw(chart) {
+    if (chart.options.indexAxis === "y") return;
     const opts = rawChartPluginOptions(chart)?.barValueLabels as
       | BarValueLabelsOptions
       | undefined;
@@ -190,6 +191,7 @@ function formatHbarValue(value: number, suffix: string, decimals: number) {
 const hbarValueLabelsPlugin: Plugin<"bar"> = {
   id: "hbarValueLabels",
   afterDatasetsDraw(chart) {
+    if (chart.options.indexAxis !== "y") return;
     const opts = rawChartPluginOptions(chart)?.hbarValueLabels as
       | { enabled?: boolean; suffix?: string; decimals?: number }
       | undefined;
@@ -215,6 +217,11 @@ const hbarValueLabelsPlugin: Plugin<"bar"> = {
     ctx.restore();
   },
 };
+
+ChartJS.unregister(
+  { id: "barValueLabels" },
+  { id: "hbarValueLabels" }
+);
 
 ChartJS.register(
   CategoryScale,
@@ -669,7 +676,7 @@ function SectionHeader({ eyebrow, title }: { eyebrow: string; title: string }) {
   );
 }
 
-const BAR_SERIES_COLORS = ["#2563EB", "#BC7C3C", "#111827", "#64748B", "#CBD5E1"] as const;
+const BAR_SERIES_COLORS = ["#BC7C3C", "#111111", "#8C8C8C", "#D8D8D8", "#6B6B6B"] as const;
 
 function barSeriesColor(index: number) {
   return BAR_SERIES_COLORS[index % BAR_SERIES_COLORS.length];
