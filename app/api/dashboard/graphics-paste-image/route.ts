@@ -14,6 +14,7 @@ import {
 const MODEL = process.env.OPENAI_GRAPHICS_MODEL ?? "gpt-4o-mini";
 /** ~10 MiB raw base64 payload guard */
 const MAX_BASE64_CHARS = 14_000_000;
+const MAX_PROMPT_CHARS = 4000;
 
 export async function POST(req: NextRequest) {
   const cookieStore = await cookies();
@@ -34,6 +35,7 @@ export async function POST(req: NextRequest) {
     chartKind?: string;
     imageBase64?: string;
     mimeType?: string;
+    prompt?: string;
   };
   try {
     body = await req.json();
@@ -65,7 +67,18 @@ export async function POST(req: NextRequest) {
       ? mimeRaw.toLowerCase().replace("image/jpg", "image/jpeg")
       : "image/png";
 
+  const prompt = typeof body.prompt === "string" ? body.prompt.trim() : "";
+  if (prompt.length > MAX_PROMPT_CHARS) {
+    return NextResponse.json(
+      { error: `Prompt too long (max ${MAX_PROMPT_CHARS})` },
+      { status: 400 }
+    );
+  }
+
   const dataUrl = `data:${mimeType};base64,${imageBase64}`;
+  const promptBlock = prompt
+    ? `\n\nUser prompt:\n${prompt}`
+    : "\n\nUser prompt: Extract the clearest chart-ready data from the image.";
 
   const openaiRes = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
@@ -85,7 +98,7 @@ export async function POST(req: NextRequest) {
           content: [
             {
               type: "text",
-              text: `Chart kind: ${chartKind}\nExtract paste-ready TSV from this image.`,
+              text: `Chart kind: ${chartKind}\nExtract paste-ready TSV from this image.${promptBlock}`,
             },
             {
               type: "image_url",

@@ -8,6 +8,7 @@ export const GRAPHICS_ASSIST_RULES: Record<ChartPasteKind, string> = {
 - Optional HEADER row first: if any series column is NOT numeric, columns 2+ become legend labels for every series; following rows are data.
 - Every data row must have the same number of series columns.
 - Numbers may include commas (e.g. 1,234); they become integers after rounding.
+- For dense benchmark tables, use the prompt to choose a compact comparison. Treat methods/models as row labels and metrics/conditions as series. Ignore section headers, arrows, deltas, footnotes, bolding, and shading unless the prompt explicitly asks for them.
 Example:
 Quarter\tSeries A\tSeries B\tSeries C
 Q1\t42\t33\t28`,
@@ -95,6 +96,7 @@ ${rule}
 Hard rules:
 - Respond with a single JSON object only (no markdown fences). Shape: {"tsv":"<string>"}
 - The "tsv" value must be ONE string with lines separated by \\n. Use TAB \\t between columns on each line.
+- If the image is a dense table, follow the user's prompt to select the subset to chart. Do not include visual-only rows such as group headers, separators, arrows, deltas, or formatting cues as data.
 - Guess illegible cells conservatively; prefer leaving a row out over inventing numbers.
 - Do not include explanations outside the JSON.
 - Ensure the TSV strictly satisfies the rules above so it passes programmatic validation.`;

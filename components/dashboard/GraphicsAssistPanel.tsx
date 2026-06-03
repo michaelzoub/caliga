@@ -1,6 +1,6 @@
 "use client";
 
-import { ImagePlus, Loader2, MessageSquare } from "lucide-react";
+import { ImagePlus, Loader2, MessageSquare, X } from "lucide-react";
 import {
   useCallback,
   useId,
@@ -62,11 +62,21 @@ export function GraphicsAssistPanel({
   const [imageBusy, setImageBusy] = useState(false);
   const [imageErr, setImageErr] = useState<string | null>(null);
   const [dragActive, setDragActive] = useState(false);
+  const [imageFile, setImageFile] = useState<File | null>(null);
 
   const busy = loading || imageBusy;
 
+  const attachImageFile = useCallback((file: File) => {
+    if (!file.type.startsWith("image/")) {
+      setImageErr("Use an image file (PNG, JPEG, GIF, or WebP).");
+      return;
+    }
+    setImageErr(null);
+    setImageFile(file);
+  }, []);
+
   const extractFromImageFile = useCallback(
-    async (file: File) => {
+    async (file: File, prompt: string) => {
       if (!file.type.startsWith("image/")) {
         setImageErr("Use an image file (PNG, JPEG, GIF, or WebP).");
         return;
@@ -79,7 +89,12 @@ export function GraphicsAssistPanel({
           method: "POST",
           credentials: "same-origin",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ chartKind, imageBase64: base64, mimeType }),
+          body: JSON.stringify({
+            chartKind,
+            imageBase64: base64,
+            mimeType,
+            prompt,
+          }),
         });
         const data = (await res.json()) as {
           ok?: boolean;
@@ -98,6 +113,7 @@ export function GraphicsAssistPanel({
           throw new Error("Unexpected response from server.");
         }
         onApplyTsv(data.tsv);
+        setImageFile(null);
       } catch (e) {
         setImageErr(e instanceof Error ? e.message : "Image extract failed.");
       } finally {
@@ -118,13 +134,13 @@ export function GraphicsAssistPanel({
           const f = it.getAsFile();
           if (f) {
             e.preventDefault();
-            void extractFromImageFile(f);
+            attachImageFile(f);
           }
           return;
         }
       }
     },
-    [busy, extractFromImageFile]
+    [busy, attachImageFile]
   );
 
   const onDragOver = useCallback(
@@ -151,15 +167,19 @@ export function GraphicsAssistPanel({
       e.preventDefault();
       setDragActive(false);
       const first = e.dataTransfer.files?.[0];
-      if (first) void extractFromImageFile(first);
+      if (first) attachImageFile(first);
     },
-    [busy, extractFromImageFile]
+    [busy, attachImageFile]
   );
 
   const submit = useCallback(async () => {
     const trimmed = message.trim();
-    if (!trimmed || imageBusy) return;
+    if ((!trimmed && !imageFile) || imageBusy) return;
     setError(null);
+    if (imageFile) {
+      await extractFromImageFile(imageFile, trimmed);
+      return;
+    }
     setLoading(true);
     try {
       const res = await fetch("/api/dashboard/graphics-assist", {
@@ -192,7 +212,7 @@ export function GraphicsAssistPanel({
     } finally {
       setLoading(false);
     }
-  }, [chartKind, message, onApplyTsv, imageBusy]);
+  }, [chartKind, message, onApplyTsv, imageBusy, imageFile, extractFromImageFile]);
 
   return (
     <div
@@ -250,7 +270,7 @@ export function GraphicsAssistPanel({
             onChange={(ev) => {
               const f = ev.target.files?.[0];
               ev.target.value = "";
-              if (f) void extractFromImageFile(f);
+              if (f) attachImageFile(f);
             }}
           />
           <button
@@ -268,9 +288,30 @@ export function GraphicsAssistPanel({
             {imageBusy ? "Reading image…" : "Paste / drop / import image"}
           </button>
           <span className="text-[11px] leading-snug">
-            Table screenshot → validated TSV → same as Apply (⌘V while focused below works too).
+            Attach a table screenshot, add an instruction below, then generate.
           </span>
         </div>
+        {imageFile ? (
+          <div
+            className="mt-3 flex items-center justify-between gap-3 border bg-white px-3 py-2"
+            style={{ borderColor: TOK.cardBorder, color: TOK.textPrimary }}
+          >
+            <span className="min-w-0 truncate text-[12px]">{imageFile.name || "Pasted image"}</span>
+            <button
+              type="button"
+              disabled={busy}
+              className="inline-flex size-7 shrink-0 items-center justify-center border bg-white"
+              style={{ borderColor: TOK.cardBorder, color: TOK.textPrimary }}
+              onClick={() => {
+                setImageFile(null);
+                setImageErr(null);
+              }}
+              aria-label="Remove attached image"
+            >
+              <X className="size-4" aria-hidden strokeWidth={1.75} />
+            </button>
+          </div>
+        ) : null}
       </div>
       {imageErr ? (
         <p className="mt-2 text-[13px] leading-snug text-[#BC7C3C]" role="alert">
@@ -292,7 +333,7 @@ export function GraphicsAssistPanel({
           value={message}
           onChange={(e) => setMessage(e.target.value)}
           onPaste={onPasteImage}
-          placeholder="e.g. Three categories: Control 12 and 8, Treatment A 15 and 11, Treatment B 9 and 14…"
+          placeholder="e.g. From the attached table, use Avg. columns only. Rows are methods, series are Dir. and E-t-A."
           disabled={busy}
         />
       </label>
@@ -309,15 +350,15 @@ export function GraphicsAssistPanel({
         <button
           type="button"
           onClick={() => void submit()}
-          disabled={busy || !message.trim()}
+          disabled={busy || (!message.trim() && !imageFile)}
           className={cn(
             "inline-flex items-center gap-2 border px-4 py-2 text-[13px] font-medium",
             RAD.outer
           )}
           style={{
             borderColor: TOK.textPrimary,
-            background: busy || !message.trim() ? "#f4f4f5" : TOK.textPrimary,
-            color: busy || !message.trim() ? TOK.textPrimary : "#fff",
+            background: busy || (!message.trim() && !imageFile) ? "#f4f4f5" : TOK.textPrimary,
+            color: busy || (!message.trim() && !imageFile) ? TOK.textPrimary : "#fff",
           }}
         >
           {loading ? (
