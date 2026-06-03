@@ -2,13 +2,9 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { buildAssistSystemPrompt } from "@/lib/graphics-assist-prompts";
+import { normalizeChartTsv, repairChartTsv } from "@/lib/graphics-assist-repair";
 import { extractTsvFromModelJson } from "@/lib/extract-tsv-from-model-json";
-import {
-  parseFlowPaste,
-  serializeFlowPasteOk,
-  validatePasteForChart,
-  type ChartPasteKind,
-} from "@/lib/graphics-paste-parsers";
+import { type ChartPasteKind } from "@/lib/graphics-paste-parsers";
 
 const MAX_MESSAGE_CHARS = 6000;
 const MODEL = process.env.OPENAI_GRAPHICS_MODEL ?? "gpt-4o-mini";
@@ -93,7 +89,18 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const validated = validatePasteForChart(chartKind, tsvExtracted);
+  let validated = normalizeChartTsv(chartKind, tsvExtracted);
+  if (!validated.ok) {
+    const repaired = await repairChartTsv({
+      key,
+      model: MODEL,
+      chartKind,
+      tsv: tsvExtracted,
+      validationError: validated.error,
+    });
+    if (repaired !== null) validated = normalizeChartTsv(chartKind, repaired);
+  }
+
   if (!validated.ok) {
     console.warn("[graphics-assist] parse failed", chartKind);
     return NextResponse.json(
@@ -102,12 +109,6 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  let outTsv = tsvExtracted.trim();
-  if (chartKind === "flow") {
-    const pr = parseFlowPaste(outTsv);
-    if (pr.ok) outTsv = serializeFlowPasteOk(pr);
-  }
-
   console.info("[graphics-assist] ok", chartKind);
-  return NextResponse.json({ ok: true, tsv: outTsv });
+  return NextResponse.json({ ok: true, tsv: validated.tsv });
 }

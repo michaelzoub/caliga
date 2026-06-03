@@ -84,6 +84,20 @@ Hard rules:
 - Ensure the TSV strictly satisfies the rules above so it passes programmatic validation.`;
 }
 
+export function buildAssistRepairSystemPrompt(kind: ChartPasteKind): string {
+  const rule = GRAPHICS_ASSIST_RULES[kind];
+  return `You repair invalid paste-ready data for one graphics widget.
+
+${rule}
+
+Hard rules:
+- Respond with a single JSON object only (no markdown fences). Shape: {"tsv":"<string>"}
+- The "tsv" value must be ONE string with lines separated by newline characters \\n. Use literal TAB characters \\t between columns inside each line.
+- Preserve the user's intended comparison, but remove rows/cells that are not actual chart data.
+- Every row must strictly satisfy the format above. For bar charts, every data row must have the same number of series values as the header/other rows.
+- Do not include explanations, keys other than "tsv", or trailing commentary.`;
+}
+
 /** Vision path: transcribe table/diagram from a screenshot into the same TSV shape. */
 export function buildImageExtractSystemPrompt(kind: ChartPasteKind): string {
   const rule = GRAPHICS_ASSIST_RULES[kind];

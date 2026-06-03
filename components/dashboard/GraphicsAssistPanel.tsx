@@ -357,14 +357,15 @@ export function GraphicsAssistPanel({
           )}
           style={{
             borderColor: TOK.textPrimary,
-            background: busy || (!message.trim() && !imageFile) ? "#f4f4f5" : TOK.textPrimary,
+            background:
+              busy || (!message.trim() && !imageFile) ? "#f4f4f5" : TOK.textPrimary,
             color: busy || (!message.trim() && !imageFile) ? TOK.textPrimary : "#fff",
           }}
         >
-          {loading ? (
+          {busy ? (
             <Loader2 className="size-4 animate-spin" aria-hidden />
           ) : null}
-          {loading ? "Generating…" : "Generate & apply"}
+          {busy ? "Generating…" : "Generate & apply"}
         </button>
       </div>
     </div>

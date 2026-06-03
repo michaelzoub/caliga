@@ -93,6 +93,7 @@ const FONT_SANS =
 const EXPORT_BG = TOK.plotBg;
 
 type StudioPlotBgOptions = { studioPlotBg?: string };
+type BarValueLabelsOptions = { enabled?: boolean; suffix?: string; decimals?: number };
 
 function rawChartPluginOptions(chart: Chart): Record<string, unknown> | undefined {
   return (
@@ -115,6 +116,41 @@ const chartPlotBgPlugin: Plugin<"bar" | "line"> = {
     ctx.globalCompositeOperation = "destination-over";
     ctx.fillStyle = bg;
     ctx.fillRect(0, 0, chart.width, chart.height);
+    ctx.restore();
+  },
+};
+
+const barValueLabelsPlugin: Plugin<"bar"> = {
+  id: "barValueLabels",
+  afterDatasetsDraw(chart) {
+    const opts = rawChartPluginOptions(chart)?.barValueLabels as
+      | BarValueLabelsOptions
+      | undefined;
+    if (!opts?.enabled) return;
+
+    const suffix = opts?.suffix ?? "";
+    const decimals = opts?.decimals ?? 0;
+    const { ctx, chartArea } = chart;
+    ctx.save();
+    ctx.fillStyle = TOK.textPrimary;
+    ctx.font = `600 11px ${FONT_SANS}`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "bottom";
+
+    chart.data.datasets.forEach((dataset, datasetIndex) => {
+      const meta = chart.getDatasetMeta(datasetIndex);
+      if (meta.hidden) return;
+      meta.data.forEach((element, dataIndex) => {
+        const raw = dataset.data[dataIndex];
+        const value = typeof raw === "number" ? raw : Number(raw);
+        if (!Number.isFinite(value)) return;
+        const label = `${value.toFixed(decimals)}${suffix}`;
+        const x = element.x;
+        const y = Math.max(chartArea.top + 12, element.y - 6);
+        ctx.fillText(label, x, y);
+      });
+    });
+
     ctx.restore();
   },
 };
@@ -188,6 +224,7 @@ ChartJS.register(
   Tooltip,
   Title,
   chartPlotBgPlugin,
+  barValueLabelsPlugin,
   hbarValueLabelsPlugin
 );
 
@@ -631,7 +668,7 @@ function SectionHeader({ eyebrow, title }: { eyebrow: string; title: string }) {
   );
 }
 
-const BAR_SERIES_COLORS = ["#BC7C3C", "#111111", "#8C8C8C", "#D8D8D8", "#6B6B6B"] as const;
+const BAR_SERIES_COLORS = ["#2563EB", "#111827", "#64748B", "#94A3B8", "#CBD5E1"] as const;
 
 function barSeriesColor(index: number) {
   return BAR_SERIES_COLORS[index % BAR_SERIES_COLORS.length];
@@ -1146,6 +1183,9 @@ export function GraphicsStudio() {
   const [barFoot, setBarFoot] = useState(
     "Subtotals summarize each grouped series shown in brand colors."
   );
+  const [barShowValues, setBarShowValues] = useState(true);
+  const [barValueSuffix, setBarValueSuffix] = useState("");
+  const [barValueDecimals, setBarValueDecimals] = useState(0);
 
   const barChartRef = useRef<Chart<"bar"> | null>(null);
 
@@ -1376,6 +1416,17 @@ export function GraphicsStudio() {
             r.rows[0]?.values.map((_, i) => barLegends[i] ?? `Series ${i + 1}`) ??
             barLegends
         );
+        const values = r.rows.flatMap((row) => row.values);
+        const legends = r.legends ?? barLegends;
+        const looksPercent =
+          values.length > 0 &&
+          values.every((value) => value >= 0 && value <= 100) &&
+          legends.some((legend) => /avg|dir|e-t-a|score|rate|accuracy|percent|%/i.test(legend));
+        if (looksPercent) {
+          setBarYL("Performance (%)");
+          setBarValueSuffix("%");
+          setBarValueDecimals(1);
+        }
         setPasteBar(tsv);
         setBarDataMode("paste");
         setStudioSection("graphics");
@@ -1473,13 +1524,28 @@ export function GraphicsStudio() {
     [barLegends, barParsed, barRows]
   );
 
+  const barYMax = useMemo(() => {
+    const values = barRows.flatMap((row) => row.values).filter(Number.isFinite);
+    if (!values.length) return 10;
+    const peak = Math.max(...values, 0);
+    return Math.max(peak * 1.12, peak + 6, 10);
+  }, [barRows]);
+
   const barOptions = useMemo(
     () => ({
       responsive: true,
       maintainAspectRatio: false,
       devicePixelRatio: typeof window !== "undefined" ? window.devicePixelRatio : 1,
+      layout: {
+        padding: { top: 14, right: 8, bottom: 0, left: 0 },
+      },
       plugins: {
         legend: { display: false },
+        barValueLabels: {
+          enabled: barShowValues,
+          suffix: barValueSuffix,
+          decimals: barValueDecimals,
+        },
         title: {
           display: Boolean(barTitle.trim()),
           text: barTitle.trim(),
@@ -1521,6 +1587,8 @@ export function GraphicsStudio() {
           },
         },
         y: {
+          beginAtZero: true,
+          suggestedMax: barYMax,
           ticks: {
             font: { size: 12, weight: 500, family: FONT_SANS },
             color: TOK.textPrimary,
@@ -1541,7 +1609,7 @@ export function GraphicsStudio() {
         },
       },
     }),
-    [barTitle, barXL, barYL]
+    [barTitle, barXL, barYL, barYMax, barShowValues, barValueSuffix, barValueDecimals]
   );
 
   const hbarParsed = useMemo(
@@ -2918,6 +2986,44 @@ export function GraphicsStudio() {
                 setFooter={setBarFoot}
                 note={undefined}
               />
+
+              <div
+                className="mt-4 grid gap-3 border-t pt-4 sm:grid-cols-[minmax(10rem,1fr)_8rem_8rem]"
+                style={{ borderColor: BORDER_TIGHT }}
+              >
+                <label className="flex items-center gap-2 text-sm" style={{ color: TOK.textPrimary }}>
+                  <input
+                    type="checkbox"
+                    checked={barShowValues}
+                    onChange={(e) => setBarShowValues(e.target.checked)}
+                  />
+                  <span className="font-medium">Value labels</span>
+                </label>
+                <label className="block">
+                  <span className={labelSpanStyle}>Suffix</span>
+                  <input
+                    className="mt-1 w-full border bg-white px-3 py-2 text-sm outline-none"
+                    style={{ borderColor: BORDER_TIGHT }}
+                    value={barValueSuffix}
+                    onChange={(e) => setBarValueSuffix(e.target.value)}
+                    placeholder="%"
+                  />
+                </label>
+                <label className="block">
+                  <span className={labelSpanStyle}>Decimals</span>
+                  <input
+                    type="number"
+                    min={0}
+                    max={4}
+                    className="mt-1 w-full border bg-white px-3 py-2 text-sm outline-none"
+                    style={{ borderColor: BORDER_TIGHT }}
+                    value={barValueDecimals}
+                    onChange={(e) =>
+                      setBarValueDecimals(Math.min(4, Math.max(0, Number(e.target.value) || 0)))
+                    }
+                  />
+                </label>
+              </div>
 
               <DataEntryModeTabs
                 idPrefix="studio-bar-data"
