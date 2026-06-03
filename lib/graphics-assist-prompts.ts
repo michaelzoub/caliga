@@ -8,7 +8,8 @@ export const GRAPHICS_ASSIST_RULES: Record<ChartPasteKind, string> = {
 - Optional HEADER row first: if any series column is NOT numeric, columns 2+ become legend labels for every series; following rows are data.
 - Every data row must have the same number of series columns.
 - Numbers may include commas (e.g. 1,234); they become integers after rounding.
-- For dense benchmark tables, use the prompt to choose a compact comparison. Treat methods/models as row labels and metrics/conditions as series. Ignore section headers, arrows, deltas, footnotes, bolding, and shading unless the prompt explicitly asks for them.
+- For dense benchmark tables, use the prompt to choose a compact comparison. Treat methods/models as row labels and metrics/conditions as series. Do not include section headers, arrows, deltas, footnotes, bolding, or shading as data.
+- If method rows repeat under group headers such as "Backbone: Qwen2.5-7B", use the group header as row-label context/prefix (e.g. "Qwen2.5-7B Zero-Shot") unless the prompt explicitly asks to collapse groups.
 Example:
 Quarter\tSeries A\tSeries B\tSeries C
 Q1\t42\t33\t28`,
@@ -111,6 +112,7 @@ Hard rules:
 - Respond with a single JSON object only (no markdown fences). Shape: {"tsv":"<string>"}
 - The "tsv" value must be ONE string with lines separated by \\n. Use TAB \\t between columns on each line.
 - If the image is a dense table, follow the user's prompt to select the subset to chart. Do not include visual-only rows such as group headers, separators, arrows, deltas, or formatting cues as data.
+- Use group headers as context for repeated row labels instead of dropping them. For example, rows repeated under two backbone headers should become distinct labels prefixed with each backbone name.
 - Guess illegible cells conservatively; prefer leaving a row out over inventing numbers.
 - Do not include explanations outside the JSON.
 - Ensure the TSV strictly satisfies the rules above so it passes programmatic validation.`;

@@ -77,7 +77,7 @@ export function ArticleHtmlBody({
   return (
     <div
       ref={ref}
-      className={cn(className)}
+      className={cn("article-body", className)}
       dangerouslySetInnerHTML={{ __html: html }}
     />
   );

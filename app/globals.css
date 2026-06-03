@@ -127,6 +127,22 @@ body {
   animation: editor-toolbar-reveal 0.2s ease-out both;
 }
 
+.ProseMirror p[data-image-caption="true"],
+.article-body p[data-image-caption="true"] {
+  margin-top: -0.5rem;
+  margin-bottom: 1.5rem;
+  color: #71717a;
+  font-family: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.72rem;
+  line-height: 1.45;
+  letter-spacing: 0.02em;
+}
+
+.ProseMirror img + p[data-image-caption="true"],
+.article-body img + p[data-image-caption="true"] {
+  text-align: center;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .editor-toolbar-reveal {
     animation: none;

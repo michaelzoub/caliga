@@ -1,7 +1,7 @@
 "use client";
 
 import { useEditor, EditorContent } from "@tiptap/react";
-import type { Editor as TiptapEditor } from "@tiptap/core";
+import { Extension, type Editor as TiptapEditor } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
 import Link from "@tiptap/extension-link";
 import Placeholder from "@tiptap/extension-placeholder";
@@ -36,6 +36,27 @@ import {
   imageTitleFromFilename,
   withImageAttachmentTitles,
 } from "@/lib/image-attachment-titles";
+
+const ImageCaptionParagraph = Extension.create({
+  name: "imageCaptionParagraph",
+
+  addGlobalAttributes() {
+    return [
+      {
+        types: ["paragraph"],
+        attributes: {
+          imageCaption: {
+            default: false,
+            parseHTML: (element) =>
+              element.getAttribute("data-image-caption") === "true",
+            renderHTML: (attributes) =>
+              attributes.imageCaption ? { "data-image-caption": "true" } : {},
+          },
+        },
+      },
+    ];
+  },
+});
 
 type SaveStatus = "idle" | "saving" | "saved" | "error";
 
@@ -218,6 +239,7 @@ export default function ArticleEditor({
       Link.configure({ openOnClick: false }),
       Placeholder.configure({ placeholder: "Start writing…" }),
       Image.configure({ inline: false, allowBase64: false }),
+      ImageCaptionParagraph,
       LatexBlock,
       LatexInline,
     ],
@@ -306,13 +328,21 @@ export default function ArticleEditor({
         }
         const { url } = await res.json();
         const attachmentTitle = imageTitleFromFilename(file.name);
-        // After inserting the image (a leaf node), create a paragraph so
-        // the cursor has somewhere to go and the user can keep typing.
         editor
           .chain()
           .focus()
-          .setImage({ src: url, alt: attachmentTitle, title: attachmentTitle })
-          .createParagraphNear()
+          .insertContent([
+            {
+              type: "image",
+              attrs: { src: url, alt: attachmentTitle, title: attachmentTitle },
+            },
+            {
+              type: "paragraph",
+              attrs: { imageCaption: true },
+              content: [{ type: "text", text: attachmentTitle }],
+            },
+            { type: "paragraph" },
+          ])
           .focus()
           .run();
       } finally {

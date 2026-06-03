@@ -191,8 +191,9 @@ const hbarValueLabelsPlugin: Plugin<"bar"> = {
   id: "hbarValueLabels",
   afterDatasetsDraw(chart) {
     const opts = rawChartPluginOptions(chart)?.hbarValueLabels as
-      | { suffix?: string; decimals?: number }
+      | { enabled?: boolean; suffix?: string; decimals?: number }
       | undefined;
+    if (!opts?.enabled) return;
     const suffix = opts?.suffix ?? "%";
     const decimals = opts?.decimals ?? 1;
     const meta = chart.getDatasetMeta(0);
@@ -668,7 +669,7 @@ function SectionHeader({ eyebrow, title }: { eyebrow: string; title: string }) {
   );
 }
 
-const BAR_SERIES_COLORS = ["#2563EB", "#111827", "#64748B", "#94A3B8", "#CBD5E1"] as const;
+const BAR_SERIES_COLORS = ["#2563EB", "#BC7C3C", "#111827", "#64748B", "#CBD5E1"] as const;
 
 function barSeriesColor(index: number) {
   return BAR_SERIES_COLORS[index % BAR_SERIES_COLORS.length];
@@ -1423,6 +1424,7 @@ export function GraphicsStudio() {
           values.every((value) => value >= 0 && value <= 100) &&
           legends.some((legend) => /avg|dir|e-t-a|score|rate|accuracy|percent|%/i.test(legend));
         if (looksPercent) {
+          setBarXL("Method");
           setBarYL("Performance (%)");
           setBarValueSuffix("%");
           setBarValueDecimals(1);
@@ -1666,6 +1668,7 @@ export function GraphicsStudio() {
         studioPlotBg: HBAR_TOK.plotBg,
         legend: { display: false },
         hbarValueLabels: {
+          enabled: true,
           suffix: hbarValueSuffix,
           decimals: hbarValueDecimals,
         },

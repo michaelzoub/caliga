@@ -22,6 +22,21 @@ export function withImageAttachmentTitles(html: string) {
 
     img.setAttribute("title", title);
     img.setAttribute("alt", existingAlt || title);
+
+    const next = img.nextElementSibling;
+    const hasCaption =
+      next instanceof HTMLParagraphElement &&
+      (next.getAttribute("data-image-caption") === "true" ||
+        next.textContent?.trim() === title);
+
+    if (!hasCaption) {
+      const caption = document.createElement("p");
+      caption.setAttribute("data-image-caption", "true");
+      caption.textContent = title;
+      img.insertAdjacentElement("afterend", caption);
+    } else if (next instanceof HTMLParagraphElement) {
+      next.setAttribute("data-image-caption", "true");
+    }
   });
 
   return root.innerHTML;
