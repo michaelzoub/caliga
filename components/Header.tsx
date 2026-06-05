@@ -25,7 +25,7 @@ export function Header() {
             aria-label="Caliga home"
           >
             <Image
-              src="/caliga-logo.png"
+              src="/CALIGAlogo.png"
               alt="Caliga"
               width={900}
               height={470}
