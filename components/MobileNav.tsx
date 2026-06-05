@@ -60,19 +60,19 @@ export function MobileNav({ links }: Props) {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
             transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-            className="absolute left-3 right-3 top-[7rem] z-[201] flex max-h-[min(78dvh,34rem)] flex-col overflow-hidden border border-zinc-200 bg-white shadow-[0_20px_50px_-12px_rgba(0,0,0,0.18)] sm:top-[7.25rem]"
+            className="absolute left-3 right-3 top-20 z-[201] flex max-h-[min(78dvh,34rem)] flex-col overflow-hidden border border-black/14 bg-white sm:top-20"
           >
-            <div className="flex items-center justify-between border-b border-zinc-200 bg-zinc-50 px-4 py-3">
+            <div className="flex items-center justify-between border-b border-black/12 bg-black/[0.035] px-4 py-3">
               <p
                 id="mobile-nav-title"
-                className="font-mono text-[10px] font-semibold uppercase tracking-[0.22em] text-[#BC7C3C]"
+                className="font-mono text-[10px] font-semibold uppercase tracking-[0.22em] text-black/50"
               >
                 Navigate
               </p>
               <button
                 type="button"
                 onClick={() => setOpen(false)}
-                className="rounded-none border border-zinc-300 bg-white px-3 py-1.5 font-mono text-[10px] font-medium uppercase tracking-[0.16em] text-[#111111] transition-colors hover:text-[#BC7C3C]"
+                className="rounded-none border border-black/14 bg-white px-3 py-1.5 font-mono text-[10px] font-medium uppercase tracking-[0.16em] text-black transition-colors hover:bg-black/[0.04]"
               >
                 Close
               </button>
@@ -86,19 +86,19 @@ export function MobileNav({ links }: Props) {
                   key={item.href}
                   href={item.href}
                   onClick={() => setOpen(false)}
-                  className="border-b border-zinc-100 py-4 font-sans text-[15px] font-semibold tracking-tight text-[#111111] transition-colors hover:text-[#BC7C3C] last:border-b-0"
+                  className="border-b border-black/10 py-4 font-sans text-[15px] font-semibold tracking-tight text-black transition-colors hover:text-[#8A542E] last:border-b-0"
                 >
                   {item.label}
                 </Link>
               ))}
             </nav>
-            <div className="flex flex-col gap-2 border-t border-zinc-200 bg-zinc-50/80 px-4 py-4">
+            <div className="flex flex-col gap-2 border-t border-black/12 bg-black/[0.035] px-4 py-4">
               <Button
                 href={SOCIAL_X_URL}
                 target="_blank"
                 rel="noopener noreferrer"
                 variant="primary"
-                className="w-full justify-center !px-4 !py-3 !text-[10px] font-mono uppercase tracking-[0.14em]"
+                className="w-full justify-center !bg-black !px-4 !py-3 !text-[10px] !text-white font-mono uppercase tracking-[0.14em]"
                 onClick={() => setOpen(false)}
               >
                 Research &amp; updates
@@ -116,7 +116,7 @@ export function MobileNav({ links }: Props) {
         type="button"
         id="mobile-nav-toggle"
         onClick={() => setOpen((v) => !v)}
-        className="rounded-none border border-zinc-400 bg-white px-3 py-2 font-mono text-[10px] uppercase tracking-[0.16em] text-[#111111] shadow-sm transition-colors hover:text-[#BC7C3C]"
+        className="rounded-none border border-black/14 bg-white px-3 py-2 font-mono text-[10px] uppercase tracking-[0.16em] text-black transition-colors hover:bg-black/[0.04]"
         aria-expanded={open}
         aria-controls="mobile-primary-nav"
       >
